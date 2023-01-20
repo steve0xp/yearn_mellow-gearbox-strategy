@@ -126,3 +126,23 @@ Note though that to make this work, you must set your `INFURA_API_KEY` and your 
 - [Awesome Foundry](https://github.com/crisgarner/awesome-foundry)
 - [Foundry Book](https://book.getfoundry.sh/)
 - [Learn Foundry Tutorial](https://www.youtube.com/watch?v=Rp_V7bYiTCM)
+
+---
+
+# Steve's Notes:
+
+## Testing Against Local Mainnet Fork
+To run unit tests against a non-persistent local mainnet fork, first make sure you have a `.env` file set up at the root (follow `.env.example` format) and populate the `MAINNET_RPC` variable like so:
+
+`MAINNET_RPC=<insert ETH RPC URL here>`
+
+Make sure you are using latest version of foundry, so that it auto-sources `.env`, otherwise run (while in the root directory): `source .env`
+
+CLI command: `forge test -vvv --fork-url MAINNET_RPC`
+
+_You can also test individual contracts with the following:_
+- _`forge test --match-contract Kernel -vvv`_
+- _Where `Kernel` is the name of the contract__
+
+
+---
