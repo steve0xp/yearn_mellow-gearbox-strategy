@@ -7,12 +7,12 @@ import {BaseStrategy, StrategyParams} from "@yearnvaults/contracts/BaseStrategy.
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {IGearboxRootVault} from "@mellowvaults/contracts/interfaces/vaults/IGearboxRootVault.sol"; 
+import {IGearboxRootVault} from "@mellowvaults/contracts/interfaces/vaults/IGearboxRootVault.sol";
 
 /// @title StrategyMellow-GearboxWETH
 /// @notice Yearn strategy deploying wETH to Mellow Fearless Gearbox wETH strategy
-/// @author @steve0xp.eth && Val John
-/// @dev NOTE - contract is a wip still
+/// @author @steve0xp && @0xValJohn
+/// @dev NOTE - contract is a wip still. See PR comments && TODOs in this file
 contract Strategy is BaseStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
@@ -32,19 +32,13 @@ contract Strategy is BaseStrategy {
 
     /// @inheritdoc BaseStrategy
     function name() external view override returns (string memory) {
-        return string(
-                abi.encodePacked(
-                    "StrategyMellow-Gearbox",
-                    IERC20Metadata(address(want)).symbol()
-                )
-            );
+        return string(abi.encodePacked("StrategyMellow-Gearbox", IERC20Metadata(address(want)).symbol()));
     }
-    
+
     /// @inheritdoc BaseStrategy
     /// TODO - does `mellowStrategy.tvl()` include rewards converted to wantToken or not?
     /// @dev Question - strategy should only have wantTokens and mellowLPTs, no other ERC20s from the strategy. Those strategies should have been converted
     function estimatedTotalAssets() public view override returns (uint256) {
-
         return balanceOfWant() + valueOfMellowLPT(); // TODO - may have to update helper functions to use gearboxRootVault.epochToPriceForLpTokenD18() for the price conversion.
 
         // return balanceOfWant() + ((mellowLPT.balanceOf(address(this)) * D18 / mellowLPT.totalSupply()) * mellowStrategy.tvl()) / D18;   // TODO - Delete if deemed irrelevant; this was the old no-helper function way
@@ -52,7 +46,7 @@ contract Strategy is BaseStrategy {
 
     /* ========== INTERNAL FUNCTIONS ========== */
 
-    /// @notice called when preparing return to have proper accounting of losses and gains from the last time harvest() has been called. 
+    /// @notice called when preparing return to have proper accounting of losses and gains from the last time harvest() has been called.
     /// @param debtOutstanding - how much want token does the vault want right now. You're preparing the return of the wantToken, liquidiating anything you can to get that amount back to the vault.
     /// @dev Part of Harvest "flow" - bot calls "harvest()", it calls this function && adjustPosition()
     /// Question - does this function only get called w/ harvest() or withdraw() sequences? If so, are there times when it is called w/ _debtOutstanding being 0?
@@ -60,11 +54,7 @@ contract Strategy is BaseStrategy {
     function prepareReturn(uint256 _debtOutstanding)
         internal
         override
-        returns (
-            uint256 _profit,
-            uint256 _loss,
-            uint256 _debtPayment
-        )
+        returns (uint256 _profit, uint256 _loss, uint256 _debtPayment)
     // solhint-disable-next-line no-empty-blocks
     {
         // Run initial profit + loss calculations.
@@ -81,10 +71,9 @@ contract Strategy is BaseStrategy {
 
         // Free up _debtOutstanding + our profit, and make any necessary adjustments to the accounting.
 
-        (uint256 _amountFreed, uint256 _liquidationLoss) =
-            liquidatePosition(_debtOutstanding + _profit);
+        (uint256 _amountFreed, uint256 _liquidationLoss) = liquidatePosition(_debtOutstanding + _profit);
 
-        _loss = _loss + _liquidationLoss;  
+        _loss = _loss + _liquidationLoss;
 
         _debtPayment = Math.min(_debtOutstanding, _amountFreed);
 
@@ -96,11 +85,10 @@ contract Strategy is BaseStrategy {
             _profit = _profit - _loss;
             _loss = 0;
         }
-        
     }
 
     /// @notice investing excess want token into the strategy
-    /// @dev Part of Harvest "flow" - bot calls "harvest()", it calls this function && prepareReturn()    
+    /// @dev Part of Harvest "flow" - bot calls "harvest()", it calls this function && prepareReturn()
     /// @param _debtOutstanding amount of debt from Vault required at minimum
     /// @dev TODO - if we are claiming rewards that are still in CRV and CVX from the strategy then we'll have to swap them. Right now it seems that Mellow Protocol will have them ready in wantToken. TBD from convos.
     function adjustPosition(uint256 _debtOutstanding) internal override {
@@ -112,7 +100,7 @@ contract Strategy is BaseStrategy {
 
         // from angle strategy: Claim rewards here so that we can chain tend() -> yswap sell -> harvest() in a single transaction
         // gearboxRootVault.invokeExecution(); // TODO - not sure if/what function is to be called to claim rewards for Gearbox strategy. The problem with doing this though is that we are paying the gas tx for claiming rewards. Probably should have some conditions in here to check that it's worth it.
-    
+
         uint256 _WETHBal = balanceOfWant();
 
         // do not invest if we have more debt than want
@@ -121,15 +109,12 @@ contract Strategy is BaseStrategy {
         }
 
         // Invest the rest of the want
-
         uint256 _excessWETH = _WETHBal - _debtOutstanding;
-
         uint256 lptMinimum = 0; // TODO: do we want to define a minimum LP amount to receive based on the balance in the Mellow vault system?
 
-        uint256 lpAmount = gearboxRootVault.deposit(_excessWETH,lptMinimum,""); // TODO: What should we do with the vaultOptions param --> I see it in one of their test files for claimToken as "bytes[] memory vaultOptions = new bytes[](2);"
+        uint256 lpAmount = gearboxRootVault.deposit(_excessWETH, lptMinimum, ""); // TODO: What should we do with the vaultOptions param --> I see it in one of their test files for claimToken as "bytes[] memory vaultOptions = new bytes[](2);"
 
         assert(lpAmount >= lptMinimum);
-        
     }
 
     /// @notice Liquidate up to `_amountNeeded` of `want` of this strategy's positions, irregardless of slippage. Any excess will be re-invested with `adjustPosition()`.
@@ -160,24 +145,18 @@ contract Strategy is BaseStrategy {
 
     /// @inheritdoc BaseStrategy
     function liquidateAllPositions() internal override returns (uint256 _amountFreed) {
-        (_amountFreed, ) = liquidatePosition(estimatedTotalAssets());
+        (_amountFreed,) = liquidatePosition(estimatedTotalAssets());
     }
 
     /// @notice withdraw specified amount of want from strategy
     /// @param _amount needed to be withdrawn from underlying protocol
     /// @dev TODO - decide on how yearn is checking balance of wantTokens inside of strategy. 1. Use Mellow `tvl()` function for vaults, 2. query Gearbox for Mellow vault address and do the math based on yearn's LPT ratio vs rest of amount in Geearbox for Mellow. (1st is easier, 2nd is more to the source)
     function _withdrawSome(uint256 _amount) internal {
-
         uint256 _lptToBurn = Math.min(wantToMelloToken(_amount), balanceOfMellowToken()); // see dev comment above
 
-
-        // TODO - consider having harvestTrigger() have conditional code checking that the `period` is close to elapsing.
-        // TODO - NOTE: consider having bot not call `harvest()` w/ a nonzero `_debtOutstanding` unless vault really needs to access illiquid strategy assets. This is because of the partial illiquidity due to `period` duration for underlying Gearbox credit account lifespan. Thus, `harvest()` would be called to just get accounting, claim rewards, BUT NOT liquidate. OK, but if someone manually calls `harvest()` w/ a nonzero value for `_debtOutstanding`, then `withdrawSome()` would not actually successfully change the balance of wnat token, all it would do is queue up a withdraw. TODO - have talks with Mellow to have them auto-push yearn the withdrawal amount, otherwise we'll have to have a separate bot claim it or something. 
-        
         gearboxRootVault.registerWithdrawal(_lptToBurn); // queues up withdrawals for current epoch. Also closes out any hanging withdrawals from before, so may have more wantToken in the strategy then we wanted from this.
 
         // TODO: write up an assertion to ensure that redemption was successfully transacted.
-
     }
 
     /// @inheritdoc BaseStrategy
@@ -189,36 +168,19 @@ contract Strategy is BaseStrategy {
         // TODO - possibly transfer CVX
     }
 
-    function protectedTokens()
-        internal
-        view
-        override
-        returns (address[] memory)
+    function protectedTokens() internal view override returns (address[] memory) 
     // solhint-disable-next-line no-empty-blocks
-    {
+    {}
 
-    }
-
-    function ethToWant(uint256 _amtInWei)
-        public
-        view
-        virtual
-        override
-        returns (uint256)
-    {
+    function ethToWant(uint256 _amtInWei) public view virtual override returns (uint256) {
         return _amtInWei;
     }
 
     /* ========== KEEP3RS ========== */
 
     // use this to determine when to harvest
-    // NOTE - only a few lines of code are new compared to BaseStrategy.sol, and were inspired / adjusted from the angle strategy. 
-    function harvestTrigger(uint256 callCostinEth)
-        public
-        view
-        override
-        returns (bool)
-    {
+    // NOTE - only a few lines of code are new compared to BaseStrategy.sol, and were inspired / adjusted from the angle strategy.
+    function harvestTrigger(uint256 callCostinEth) public view override returns (bool) {
         // Should not trigger if strategy is not active (no assets and no debtRatio). This means we don't need to adjust keeper job.
         if (!isActive()) {
             return false;
@@ -289,21 +251,17 @@ contract Strategy is BaseStrategy {
     // check if the current baseFee is below our external target
     // TODO: not sure if this address is the one to use still
     function isBaseFeeAcceptable() internal view returns (bool) {
-        return
-            IBaseFee(0xb5e1CAcB567d98faaDB60a1fD4820720141f064F)
-                .isCurrentBaseFeeAcceptable();
+        return IBaseFee(0xb5e1CAcB567d98faaDB60a1fD4820720141f064F).isCurrentBaseFeeAcceptable();
     }
-
 
     /* ========== SETTERS ========== */
 
     // TODO: change this to respect the mellow strategy (if needed at all). This whole function is from angle strategy.
     // Min profit to start checking for harvests if gas is good, max will harvest no matter gas (both in USDT, 6 decimals). Credit threshold is in want token, and will trigger a harvest if credit is large enough. check earmark to look at convex's booster.
-    function setHarvestTriggerParams(
-        uint256 _harvestProfitMin,
-        uint256 _harvestProfitMax,
-        uint256 _creditThreshold
-    ) external onlyVaultManagers {
+    function setHarvestTriggerParams(uint256 _harvestProfitMin, uint256 _harvestProfitMax, uint256 _creditThreshold)
+        external
+        onlyVaultManagers
+    {
         harvestProfitMin = _harvestProfitMin;
         harvestProfitMax = _harvestProfitMax;
         creditThreshold = _creditThreshold;
@@ -332,18 +290,13 @@ contract Strategy is BaseStrategy {
     /// @notice converts Mellow LPT tokens to `want` token denomination
     /// @param _mellowTokenAmount being converted to `want` token denomination
     /// @return converted amount
-    function mellowLPTToWant(uint256 _mellowTokenAmount)
-        public
-        view
-        returns (uint256)
-    {
+    function mellowLPTToWant(uint256 _mellowTokenAmount) public view returns (uint256) {
         return (_mellowTokenAmount * getMellowLPTRate()) / 1e18; // normalize from D18 in getMellowLPTRate()
     }
 
     /// @notice obtains the current rate for 1 Mellow LPT in `want` tokens
     /// @return conversion rate between Mellow LPTs and `want` tokens
     function getMellowLPTRate() public view returns (uint256) {
-    
         // how much does 1 LPT equal in wantToken?
         uint256 _mellowLPTRate = mellowLPT.totalSupply() * D18 / gearboxRootVault.tvl();
 
