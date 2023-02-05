@@ -1,3 +1,22 @@
+# 🏄‍♀️⚙️ Yearn Mellow-Gearbox_wETH Strategy | _(AKA Mellowed-Out wETH Strategy)_
+## **Strategy Details**
+
+This strategy simply deploys wETH from Yearn wETH Vault to the Mellow Fearless Gearbox wETH Strategy.
+
+There are attractive yields on the Gearbox protocol only accessible to approved credit managers, and Mellow is one of them. Yearn will/is explore being approved by Gearbox protocol, but in the interim strives to offer yield to Yearn users by accessing Gearbox yields via Mellow Protocol.
+
+> 🔍 Additional reasoning can be found in the Due Diligence document [here](https://hackmd.io/@yaSscTAySm-9M5DU5kgpIA/BkeZ00eKi).
+
+> 🚨 Please note, this repo is still under development and the code is not ready, tested, or audited. See active project tasks for most up to date areas of focus.
+
+💬 Feel free to open up any issues as you see fit!
+
+---
+
+
+<details markdown='1'><summary>  README Details from storming0x Template Repo
+ </summary>
+
 # Yearn Strategy Foundry Mix
 
 ## What you'll find here
@@ -127,22 +146,5 @@ Note though that to make this work, you must set your `INFURA_API_KEY` and your 
 - [Foundry Book](https://book.getfoundry.sh/)
 - [Learn Foundry Tutorial](https://www.youtube.com/watch?v=Rp_V7bYiTCM)
 
----
+ </details>
 
-# Steve's Notes:
-
-## Testing Against Local Mainnet Fork
-To run unit tests against a non-persistent local mainnet fork, first make sure you have a `.env` file set up at the root (follow `.env.example` format) and populate the `MAINNET_RPC` variable like so:
-
-`MAINNET_RPC=<insert ETH RPC URL here>`
-
-Make sure you are using latest version of foundry, so that it auto-sources `.env`, otherwise run (while in the root directory): `source .env`
-
-CLI command: `forge test -vvv --fork-url MAINNET_RPC`
-
-_You can also test individual contracts with the following:_
-- _`forge test --match-contract Kernel -vvv`_
-- _Where `Kernel` is the name of the contract__
-
-
----
