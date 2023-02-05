@@ -1,34 +1,30 @@
 // SPDX-License-Identifier: AGPL-3.0
 
 pragma solidity ^0.8.12;
-pragma experimental ABIEncoderV2;
 
 import {BaseStrategy, StrategyParams} from "@yearnvaults/contracts/BaseStrategy.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {IGearboxRootVault} from "@mellowvaults/contracts/interfaces/vaults/IGearboxRootVault.sol";
+import {IGearboxRootVault} from "./interfaces/Mellow/IGearboxRootVault.sol";
 
 /// @title StrategyMellow-GearboxWETH
 /// @notice Yearn strategy deploying wETH to Mellow Fearless Gearbox wETH strategy
 /// @author @steve0xp && @0xValJohn
-/// @dev NOTE - contract is a wip still. See PR comments && TODOs in this file
+/// @dev NOTE - contract is a wip still. See PR comments && open issues, && TODOs in this file
 contract Strategy is BaseStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
 
-    IGearboxRootVault internal constant gearboxRootVault = IGearboxRootVault(0xD3442BA55108d33FA1EB3F1a3C0876F892B01c44); // specific GearboxRootVault for Fearless Gearbox Strategies
+    IGearboxRootVault public gearboxRootVault; // 0xD3442BA55108d33FA1EB3F1a3C0876F892B01c44 - specific mellowLPT for wETH Fearless Gearbox
+    IERC20 public mellowLPT;
+    bool internal isOriginal = true;
 
-    IERC20 internal constant mellowLPT = IERC20(0xD3442BA55108d33FA1EB3F1a3C0876F892B01c44); // specific mellowLPT for wETH Fearless Gearbox
+    /// EVENTS
 
-    uint256 public constant D18 = 10 ** 18;
+    // event Cloned(address indexed clone);
 
-    /* ========== PUBLIC FUNCTIONS ========== */
-
-    /// @notice setup w/ wETH vault && baseStrategy details
-    /// @dev optional override for initial addresses for: strategist, rewards, and keep3r which are default msg.sender
-    /// @param _vault yearn v2 vault allocating collateral to this strategy
-    constructor(address _vault) BaseStrategy(_vault) {}
+    /// GETTERS
 
     /// @inheritdoc BaseStrategy
     function name() external view override returns (string memory) {
@@ -41,15 +37,68 @@ contract Strategy is BaseStrategy {
     function estimatedTotalAssets() public view override returns (uint256) {
         return balanceOfWant() + valueOfMellowLPT(); // TODO - may have to update helper functions to use gearboxRootVault.epochToPriceForLpTokenD18() for the price conversion.
 
-        // return balanceOfWant() + ((mellowLPT.balanceOf(address(this)) * D18 / mellowLPT.totalSupply()) * mellowStrategy.tvl()) / D18;   // TODO - Delete if deemed irrelevant; this was the old no-helper function way
+        // return balanceOfWant() + ((mellowLPT.balanceOf(address(this)) * 1e18 / mellowLPT.totalSupply()) * mellowStrategy.tvl()) / 1e18;   // TODO - Delete if deemed irrelevant; this was the old no-helper function way
     }
 
-    /* ========== INTERNAL FUNCTIONS ========== */
+    /// CONSTRUCTOR
+
+    /// @notice setup w/ wETH vault, baseStrategy && mellow Strategy
+    /// @param _vault yearn v2 vault allocating collateral to this strategy
+    /// @param _mellowRootVault yearn v2 vault allocating collateral to this strategy
+    constructor(address _vault, address _mellowRootVault) public BaseStrategy(_vault) {
+        _initializeStrategy(__mellowRootVault);
+    }
+
+    /// SETTERS
+
+    /// @notice initialize strategy clones for new assets.
+    function initialize(
+        address _vault,
+        address _strategist,
+        address _rewards,
+        address _keeper,
+        address _mellowRootVault
+    ) public {
+        require(address(gearboxRootVault) == address(0)); // @note Only initialize once
+
+        _initialize(_vault, _strategist, _rewards, _keeper);
+        _initializeStrategy(_mellowRootVault);
+    }
+
+    // /// @notice create and initialize new Yearn-Mellow strategy for different asset
+    // function clone(address _vault, address _strategist, address _rewards, address _keeper, address _mellowRootVault)
+    //     external
+    //     returns (address payable newStrategy)
+    // {
+    //     require(isOriginal); //??
+
+    //     bytes20 addressBytes = bytes20(address(this));
+
+    //     // TODO - understand this more
+    //     assembly {
+    //         let clone_code := mload(0x40)
+    //         mstore(clone_code, 0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000)
+    //         mstore(add(clone_code, 0x14), addressBytes)
+    //         mstore(add(clone_code, 0x28), 0x5af43d82803e903d91602b57fd5bf30000000000000000000000000000000000)
+    //         newStrategy := create(0, clone_code, 0x37)
+    //     }
+
+    //     Strategy(newStrategy).initialize(_vault, _strategist, _rewards, _keeper, _mellowRootVault);
+
+    //     emit Cloned(newStrategy);
+    // }
+
+    /// INTERNAL FUNCTIONS
+
+    /// @notice initialize Yearn strategy by setting Mellow root vault
+    function _initializeStrategy(address _mellowRootVault) internal {
+        gearboxRootVault = IGearboxRootVault(_mellowRootVault); // specific GearboxRootVault for Fearless Gearbox Strategies
+        mellowLPT = IERC20(_mellowRootVault);
+    }
 
     /// @notice called when preparing return to have proper accounting of losses and gains from the last time harvest() has been called.
     /// @param debtOutstanding - how much want token does the vault want right now. You're preparing the return of the wantToken, liquidiating anything you can to get that amount back to the vault.
     /// @dev Part of Harvest "flow" - bot calls "harvest()", it calls this function && adjustPosition()
-    /// Question - does this function only get called w/ harvest() or withdraw() sequences? If so, are there times when it is called w/ _debtOutstanding being 0?
     /// Question - can _debtOutstanding ever be bigger than what the vault actually allocated to the strategy? I assume this is defined in the vault logic / workflows
     function prepareReturn(uint256 _debtOutstanding)
         internal
@@ -176,76 +225,12 @@ contract Strategy is BaseStrategy {
         return _amtInWei;
     }
 
-    /* ========== KEEP3RS ========== */
+    /// KEEP3RS
 
     // use this to determine when to harvest
-    // NOTE - only a few lines of code are new compared to BaseStrategy.sol, and were inspired / adjusted from the angle strategy.
     function harvestTrigger(uint256 callCostinEth) public view override returns (bool) {
-        // Should not trigger if strategy is not active (no assets and no debtRatio). This means we don't need to adjust keeper job.
-        if (!isActive()) {
-            return false;
-        }
-
-        // new from angle strategy vs BaseStrategy.sol
-        // harvest if we have a profit to claim at our upper limit without considering gas price
-        // TODO - if rewards / profit are in non-wantTokens then we will need to convert them -> see angle strategy and how it used uniswap routing depending on reward token it was dealing with
-        // NOTE - TODO: change next four lines to respect the mellow strategy (if needed at all). This whole function is from angle strategy.
-        uint256 claimableProfit = claimableProfitInUsdt();
-        if (claimableProfit > harvestProfitMax) {
-            return true;
-        }
-
-        // check if the base fee gas price is higher than we allow. if it is, block harvests.
-        if (!isBaseFeeAcceptable()) {
-            return false;
-        }
-
-        // trigger if we want to manually harvest, but only if our gas price is acceptable
-        if (forceHarvestTriggerOnce) {
-            return true;
-        }
-
-        // harvest if we have a sufficient profit to claim, but only if our gas price is acceptable
-        // NOTE - new from angle strategy vs BaseStrategy.sol
-        if (claimableProfit > harvestProfitMin) {
-            return true;
-        }
-
         StrategyParams memory params = vault.strategies(address(this));
-        // harvest no matter what once we reach our maxDelay
-        if (block.timestamp - params.lastReport > maxReportDelay) {
-            return true;
-        }
-
-        // QUESTION WHY is this the case? Is it bc we might as well harvest if we have stuff to put in via adjustPosition? More credit means more debt allocated from the vault ready to invest into the strategy right? Or am I mistaken?
-        if (vault.creditAvailable() > creditThreshold) {
-            return true;
-        }
-
-        // otherwise, we don't harvest
-        return false;
-    }
-
-    // TODO: change this to respect the mellow strategy (if needed at all). This whole function is from angle strategy.
-    /// @notice The value in dollars that our claimable rewards are worth (in USDT, 6 decimals).
-    function claimableProfitInUsdt() public view returns (uint256) {
-        // address[] memory path = new address[](3);
-        // path[0] = address(angleToken);
-        // path[1] = weth;
-        // path[2] = address(usdt);
-
-        // uint256 _claimableRewards = sanTokenGauge.claimable_reward(address(this), address(angleToken));
-
-        // if (_claimableRewards < 1e18) { // Dust check
-        //     return 0;
-        // }
-
-        // uint256[] memory amounts = IUniV2(unirouter).getAmountsOut(
-        //     _claimableRewards,
-        //     path
-        // );
-
-        // return amounts[amounts.length - 1];
+        return super.harvestTrigger(callCostInWei) || block.timestamp - params.lastReport > minReportDelay;
     }
 
     // check if the current baseFee is below our external target
@@ -254,7 +239,7 @@ contract Strategy is BaseStrategy {
         return IBaseFee(0xb5e1CAcB567d98faaDB60a1fD4820720141f064F).isCurrentBaseFeeAcceptable();
     }
 
-    /* ========== SETTERS ========== */
+    /// HARVEST SETTERS
 
     // TODO: change this to respect the mellow strategy (if needed at all). This whole function is from angle strategy.
     // Min profit to start checking for harvests if gas is good, max will harvest no matter gas (both in USDT, 6 decimals). Credit threshold is in want token, and will trigger a harvest if credit is large enough. check earmark to look at convex's booster.
@@ -284,21 +269,14 @@ contract Strategy is BaseStrategy {
     /// @notice gets this contract's approximate value of Mellow LPTs in `want` token denomination
     /// @return this contract's Mellow LPTs in `want` token denomination
     function valueOfMellowLPT() public view returns (uint256) {
-        return mellowLPTToWant(balanceOfMellowLPT());
-    }
-
-    /// @notice converts Mellow LPT tokens to `want` token denomination
-    /// @param _mellowTokenAmount being converted to `want` token denomination
-    /// @return converted amount
-    function mellowLPTToWant(uint256 _mellowTokenAmount) public view returns (uint256) {
-        return (_mellowTokenAmount * getMellowLPTRate()) / 1e18; // normalize from D18 in getMellowLPTRate()
+        return (balanceOfMellowLPT() * getMellowLPTRate()) / 1e18; // normalize from 1e18 in getMellowLPTRate()
     }
 
     /// @notice obtains the current rate for 1 Mellow LPT in `want` tokens
     /// @return conversion rate between Mellow LPTs and `want` tokens
     function getMellowLPTRate() public view returns (uint256) {
         // how much does 1 LPT equal in wantToken?
-        uint256 _mellowLPTRate = mellowLPT.totalSupply() * D18 / gearboxRootVault.tvl();
+        uint256 _mellowLPTRate = mellowLPT.totalSupply() * 1e18 / gearboxRootVault.tvl();
 
         return _mellowLPTRate;
     }
