@@ -33,16 +33,16 @@ contract Strategy is BaseStrategy {
 
     /// @inheritdoc BaseStrategy
     /// TODO - does `mellowStrategy.tvl()` include rewards converted to wantToken or not?
-    /// @dev Question - strategy should only have wantTokens and mellowLPTs, no other ERC20s from the strategy. Those strategies should have been converted
+    /// NOTE - now we are checking the true wantToken total: claimableTokens * claimRateForRespectiveEpoch + inStrategyTokens * currentRateForCurrentEpoch + wantTokenInThisYearnContract
     function estimatedTotalAssets() public view override returns (uint256) {
-        return balanceOfWant() + valueOfMellowLPT(); // TODO - may have to update helper functions to use gearboxRootVault.epochToPriceForLpTokenD18() for the price conversion. See issue #15
+        return balanceOfWant() + valueOfMellowLPT(); 
     }
 
     /// CONSTRUCTOR
 
     /// @notice setup w/ wETH vault, baseStrategy && Yearn Mellow Strategy
     /// @param _vault Yearn v2 vault allocating collateral to this strategy
-    /// @param _mellowRootVault // specific root vault for Mellow-Gearbox strategies, specific to wantToken. ex.) wETH: 0xD3442BA55108d33FA1EB3F1a3C0876F892B01c44
+    /// @param _mellowRootVault specific root vault for Mellow-Gearbox strategies, specific to wantToken. ex.) wETH: 0xD3442BA55108d33FA1EB3F1a3C0876F892B01c44
     constructor(address _vault, address _mellowRootVault) public BaseStrategy(_vault) {
         _initializeStrategy(__mellowRootVault);
     }
@@ -87,8 +87,10 @@ contract Strategy is BaseStrategy {
     }
 
     /// @notice permissioned manual withdrawal from Yearn-Mellow-Gearbox strategy
-    /// @dev TODO - coordinate this w/ harvest sequece: do we have two manual functions: `manualRegisterWithdraw()` & `manualWithdraw()`?
-    function manualWithdraw() external onlyVaultManagers {}
+    function manualWithdraw() external onlyVaultManagers returns (uint256 _liquidatedAmount, uint256 _loss) {
+        // TODO - when are we using manualWithdraw()? Are we still carrying out accounting tasks when doing so? If so, then this would probably be a copy of the logic in the liquidatePosition() to some degree.
+        // TODO - Do we have two manual functions: `manualRegisterWithdraw()` & `manualWithdraw()`?
+    }
 
     /// INTERNAL FUNCTIONS
 
@@ -101,7 +103,6 @@ contract Strategy is BaseStrategy {
     /// @notice called when preparing return to have accounting of losses & gains from the last harvest(), and liquidates positions if rqd
     /// @param debtOutstanding how much wantToken the vault requests
     /// @dev Part of Harvest 'workflow' - bot calls `harvest()`, it calls this function && `adjustPosition()`
-    /// Question - can _debtOutstanding ever be bigger than what the vault actually allocated to the strategy? I assume this is defined in the vault logic / workflows
     function prepareReturn(uint256 _debtOutstanding)
         internal
         override
@@ -119,9 +120,9 @@ contract Strategy is BaseStrategy {
             _loss = _totalDebt - _totalAssets;
         }
 
-        // Free up _debtOutstanding + our profit, and make any necessary adjustments to the accounting.
-
-        (uint256 _amountFreed, uint256 _liquidationLoss) = liquidatePosition(_debtOutstanding + _profit);
+        // TODO - Confirm that this 2nd param is liquidationLoss and if it's needed
+        // TODO - NOTE I think that the function will revert in the mellow contracts if we attempt to liquidate more than we have in there.
+        (uint256 _amountFreed, _liquidationLoss) = liquidatePosition(_debtOutstanding + _profit);
 
         _loss = _loss + _liquidationLoss;
 
@@ -139,7 +140,6 @@ contract Strategy is BaseStrategy {
     /// @notice investing excess want token into the strategy
     /// @dev Part of Harvest 'workflow' - bot calls `harvest()`, it calls this function && `prepareReturn()`
     /// @param _debtOutstanding amount of debt from Vault required at minimum
-    /// @dev TODO - if we are claiming rewards that are still in CRV and CVX from the strategy then we'll have to swap them. Right now it seems that Mellow Protocol will have them ready in wantToken. TBD from convos.
     function adjustPosition(uint256 _debtOutstanding) internal override {
         // NOTE: Try to adjust positions so that `_debtOutstanding` can be freed up on *next* harvest (not immediately)
 
@@ -147,8 +147,7 @@ contract Strategy is BaseStrategy {
             return;
         }
 
-        // from angle strategy: Claim rewards here so that we can chain tend() -> yswap sell -> harvest() in a single transaction
-        // gearboxRootVault.invokeExecution(); // TODO - not sure if/what function is to be called to claim rewards for Gearbox strategy. The problem with doing this though is that we are paying the gas tx for claiming rewards. Probably should have some conditions in here to check that it's worth it.
+        // TODO - not sure about what to do with this: from angle strategy: Claim rewards here so that we can chain tend() -> yswap sell -> harvest() in a single transaction
 
         uint256 _WETHBal = balanceOfWant();
 
@@ -166,7 +165,7 @@ contract Strategy is BaseStrategy {
         assert(lpAmount >= lptMinimum);
     }
 
-    /// @notice Liquidate up to `_amountNeeded` of `want` of this strategy's positions, irregardless of slippage. Any excess will be re-invested with `adjustPosition()`.
+    /// @notice Liquidate / Withdraw up to `_amountNeeded` of `want` of this strategy's positions, irregardless of slippage. Mellow Fearless Gearbox strategies have `periods` where wantTokens are locked up. If the Yearn strategy's tokens exist but are locked up, this function registers a withdraw to be called after `period` elapses and wantTokens from Gearbox credit account are freed up.
     /// @param _amountNeeded amount of `want` tokens needed from external call
     /// @return _liquidatedAmount amount of `want` tokens made available by the liquidation
     /// @return _loss indicates whether the difference is due to a realized loss, or if there is some other sitution at play (e.g. locked funds) where the amount made available is less than what is needed.
@@ -178,34 +177,52 @@ contract Strategy is BaseStrategy {
     {
         _amountNeeded = Math.min(_amountNeeded, estimatedTotalAssets()); // This makes it safe to request to liquidate more than we have
 
-        uint256 _balanceOfWant = balanceOfWant();
-        if (_balanceOfWant < _amountNeeded) {
-            _withdrawSome(_amountNeeded - _balanceOfWant);
-            _balanceOfWant = balanceOfWant();
+        uint256 _existingLiquidAssets = wantBalance();
+
+        if (_existingLiquidAssets >= _amountNeeded) {
+            return (_amountNeeded, 0);
         }
 
-        if (_balanceOfWant >= _amountNeeded) {
-            _liquidatedAmount = _amountNeeded;
-        } else {
-            _liquidatedAmount = _balanceOfWant;
-            _loss = _amountNeeded - _balanceOfWant;
+        uint256 _primaryTokensToClaim = gearboxRootVault.primaryTokensToClaim(address(this));
+        uint256 _withdrawalRequests = gearboxRootVault.withdrawalRequests(address(this));
+        uint256 _latestRequestEpoch = gearboxRootVault.latestRequestEpoch(address(this));
+        uint256 _currentEpoch = gearboxRootVault.currentEpoch();
+        uint256 _currentEpochToPriceForLpTokenD18 = gearboxRootVault.epochToPriceForLpTokenD18(currentEpoch);
+        uint256 _amountToWithdraw = _amountNeeded - _existingLiquidAssets;
+
+        // nothing to claim
+        if (_primaryTokensToClaim == 0) {
+            gearboxRootVault.registerWithdrawal(_newRegisterWithdraw);
+            return (_existingLiquidAssets, 0);
+        }
+
+        // Cannot withdraw more than withdrawable
+        _amountToWithdraw = Math.min(_primaryTokensToClaim, _amountToWithdraw);
+
+        // NOTE - this is a bit different than how the Tokemak strategy looks. Key difference is that we check if there are nonzero wantTokens available, if so we try withdrawing right away.
+        if (_primaryTokensToClaim > 0) {
+            
+        try gearboxRootVault.withdraw(_amountToWithdraw) {
+            uint256 _newLiquidAssets = wantBalance();
+
+            _liquidatedAmount = Math.min(_newLiquidAssets, _amountNeeded);
+
+            if (_liquidatedAmount < _amountNeeded) {
+                // If we couldn't liquidate the full amount needed, start the withdrawal process for the remaining
+                uint256 _newRegisterWithdraw = ((_amountNeeded - _liquidatedAmount) * 1e18) / _currentEpochToPriceForLpTokenD18; // LPTs to burn = wantToken * d18 / (want/lpt) where usually we go --> wantToken = lpt * (want/lpt) / d18
+                gearboxRootVault.registerWithdrawal(_newRegisterWithdraw);
+            }
+        } catch {
+            // If someone tries to call more than we have, the function simply returns (existingLiquidAssets, 0)
+            return (_existingLiquidAssets, 0);
+        }
+
         }
     }
 
     /// @inheritdoc BaseStrategy
     function liquidateAllPositions() internal override returns (uint256 _amountFreed) {
         (_amountFreed,) = liquidatePosition(estimatedTotalAssets());
-    }
-
-    /// @notice withdraw specified amount of want from strategy
-    /// @param _amount needed to be withdrawn from underlying protocol
-    /// @dev TODO - decide on how Yearn is checking balance of wantTokens inside of strategy. 1. Use Mellow `tvl()` function for vaults, 2. query Gearbox for Mellow vault address and do the math based on Yearn's LPT ratio vs rest of amount in Geearbox for Mellow. (1st is easier, 2nd is more to the source)
-    function _withdrawSome(uint256 _amount) internal {
-        uint256 _lptToBurn = Math.min(wantToMelloToken(_amount), balanceOfMellowToken()); // see dev comment above
-
-        gearboxRootVault.registerWithdrawal(_lptToBurn); // NOTE - queues up withdrawals for current epoch. Also closes out any hanging withdrawals from before, so may have more wantToken in the strategy then we wanted from this.
-
-        // TODO: write up an assertion to ensure that redemption was successfully transacted.
     }
 
     /// @inheritdoc BaseStrategy
@@ -229,9 +246,20 @@ contract Strategy is BaseStrategy {
     /// KEEP3RS
 
     /// @inheritdoc BaseStrategy
-    function harvestTrigger(uint256 callCostinEth) public view override returns (bool) {
-        StrategyParams memory params = vault.strategies(address(this));
-        return super.harvestTrigger(callCostInWei) || block.timestamp - params.lastReport > minReportDelay;
+    /// TODO - Question - where does callCostinETH get used? How is it used to check that the gas cost of the call won't be too much?
+    function harvestTrigger(uint256 callCostinEth) public view override returns (bool) {        
+        // harvest if we have a profit to claim at our upper limit without considering gas price
+        uint256 claimableProfit = claimableProfit();
+        if (claimableProfit > harvestProfitMax) {
+            return true;
+        }
+
+        // harvest if we have a sufficient profit to claim, but only if our gas price is acceptable
+        if (claimableProfit > harvestProfitMin) {
+            return true;
+        }
+
+        return super.harvestTrigger(callCostInWei) 
     }
 
     /// @inheritdoc BaseStrategy
@@ -240,10 +268,23 @@ contract Strategy is BaseStrategy {
         return IBaseFee(0xb5e1CAcB567d98faaDB60a1fD4820720141f064F).isCurrentBaseFeeAcceptable();
     }
 
+    /// @notice The value in wETH that our claimable rewards are worth (18 decimals)
+    function claimableProfit() public view returns (uint256) {
+
+        uint256 _totalAssets = estimatedTotalAssets();
+        uint256 _totalDebt = vault.strategies(address(this)).totalDebt;
+        uint256 _claimableProfit = _totalAssets - _totalDebt; 
+        
+        if (_claimableProfit < 1e18) { // Dust check
+            return 0;
+        }
+
+        return _claimableProfit; // returns ready-to-claim rewards
+    }
+
     /// HARVEST SETTERS
 
-    // TODO: change this to respect the mellow strategy (if needed at all). This whole function is from angle strategy.
-    // Min profit to start checking for harvests if gas is good, max will harvest no matter gas (both in USDT, 6 decimals). Credit threshold is in want token, and will trigger a harvest if credit is large enough. check earmark to look at convex's booster.
+    /// TODO - change this to respect the mellow strategy (if needed at all). This was copied from angle protocol strategy
     function setHarvestTriggerParams(uint256 _harvestProfitMin, uint256 _harvestProfitMax, uint256 _creditThreshold)
         external
         onlyVaultManagers
@@ -270,16 +311,15 @@ contract Strategy is BaseStrategy {
     /// @notice gets this contract's approximate value of Mellow LPTs in `want` token denomination
     /// @return this contract's Mellow LPTs in `want` token denomination
     function valueOfMellowLPT() public view returns (uint256) {
-        return (balanceOfMellowLPT() * getMellowLPTRate()) / 1e18; // normalize from 1e18 in getMellowLPTRate()
-    }
 
-    /// @notice obtains the current rate for 1 Mellow LPT in `want` tokens
-    /// @return conversion rate between Mellow LPTs and `want` tokens
-    function getMellowLPTRate() public view returns (uint256) {
-        // how much does 1 LPT equal in wantToken?
-        uint256 _mellowLPTRate = mellowLPT.totalSupply() * 1e18 / gearboxRootVault.tvl();
+        // calculate mellowLPTs waiting for claim * their epochRate
+        uint256 claimableLPT = gearboxRootVault.lpTokensWaitingForClaim[address(this)]; // when we haven't registered, this will be 0.
 
-        return _mellowLPTRate;
+        // calculate mellowLPTs in the strategy still & current epochRate
+        uint256 inStrategyLPT = balanceOfMellowLPT() - claimableLPT; // when we haven't registered, this will be all of our position.
+
+        // multiply both above vars by respective epochToPriceForLPT
+        return ((inStrategyLPT * gearboxRootVault.epochToPriceForLpTokenD18(gearboxRootVault.currentEpoch())) + claimableLPT * gearboxRootVault.epochToPriceForLpTokenD18(gearboxRootVault.currentEpoch())) / 1e18; // TODO - double check that this needs to be normalized from 1e18
     }
 
     // ---------------------- YSWAPS FUNCTIONS ----------------------
@@ -302,4 +342,5 @@ contract Strategy is BaseStrategy {
         angleToken.safeApprove(tradeFactory, 0);
         tradeFactory = address(0);
     }
+
 }
