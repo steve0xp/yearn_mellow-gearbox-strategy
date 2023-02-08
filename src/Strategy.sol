@@ -2,10 +2,12 @@
 
 pragma solidity ^0.8.12;
 
-import {BaseStrategy, StrategyParams} from "@yearnvaults/contracts/BaseStrategy.sol";
+import {BaseStrategy, StrategyParams, IBaseFee} from "@yearnvaults/contracts/BaseStrategy.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20MetaData.sol";
 import {IGearboxRootVault} from "./interfaces/Mellow/IGearboxRootVault.sol"; // specific GearboxRootVault for Fearless Gearbox Strategies
 
 /// @title StrategyMellow-Gearbox_wETH
@@ -19,6 +21,11 @@ contract Strategy is BaseStrategy {
     IGearboxRootVault public gearboxRootVault;
     IERC20 public mellowLPT;
     bool internal isOriginal = true;
+    address public tradeFactory = address(0);
+
+    // keeper vars
+    uint256 public harvestProfitMin; // minimum size in wETH (18 decimals) that we want to harvest
+    uint256 public harvestProfitMax; // maximum size in wETH (18 decimals) that we want to harvest
 
     /// EVENTS
 
@@ -52,7 +59,7 @@ contract Strategy is BaseStrategy {
         public
         BaseStrategy(_vault)
     {
-        _initializeStrategy(__mellowRootVault);
+        _initializeStrategy(_mellowRootVault);
     }
 
     /// SETTERS
@@ -64,7 +71,7 @@ contract Strategy is BaseStrategy {
         address _rewards,
         address _keeper,
         address _mellowRootVault
-    ) public override {
+    ) public {
         require(address(gearboxRootVault) == address(0)); // @note Only initialize once
 
         _initialize(_vault, _strategist, _rewards, _keeper);
@@ -78,7 +85,7 @@ contract Strategy is BaseStrategy {
         address _rewards,
         address _keeper,
         address _mellowRootVault
-    ) external override returns (address payable newStrategy) {
+    ) external returns (address payable newStrategy) {
         require(isOriginal);
 
         bytes20 addressBytes = bytes20(address(this));
@@ -128,7 +135,7 @@ contract Strategy is BaseStrategy {
 
     /// @notice called when preparing return to have accounting of losses & gains from the last harvest(), and liquidates positions if rqd
     /// @dev Part of Harvest 'workflow' - bot calls `harvest()`, it calls this function && `adjustPosition()`
-    /// @param debtOutstanding how much wantToken the vault requests
+    /// @param _debtOutstanding how much wantToken the vault requests
     function prepareReturn(uint256 _debtOutstanding)
         internal
         override
@@ -141,7 +148,7 @@ contract Strategy is BaseStrategy {
     {
         // Run initial profit + loss calculations.
 
-        uint256 _totalAssets = estimatedTotalAssets(); // STEVE calculating based on gearbox values, good.
+        uint256 _totalAssets = estimatedTotalAssets();
         uint256 _totalDebt = vault.strategies(address(this)).totalDebt;
 
         if (_totalAssets >= _totalDebt) {
@@ -189,16 +196,19 @@ contract Strategy is BaseStrategy {
         }
 
         // Invest the rest of the want
-        uint256 _excessWETH = _WETHBal - _debtOutstanding;
-        uint256 lptMinimum = 0; // TODO - add minimum LP amount to receive
+        uint256[] memory _excessWETH = new uint256[](1);
+        _excessWETH[0] = _WETHBal - _debtOutstanding;
+        uint256[] memory _lptMinimum = new uint256[](1);
+        _lptMinimum[0] = 0; // TODO - add minimum LP amount to receive
+        uint256 lptMinimum = 0;
 
-        uint256 lpAmount = gearboxRootVault.deposit(
+        uint256[] memory lpAmount = gearboxRootVault.deposit(
             _excessWETH,
             lptMinimum,
             ""
         ); // TODO - instill checks to ensure we get at least a certain amount of LPTs back
 
-        assert(lpAmount >= lptMinimum);
+        assert(lpAmount[0] >= _lptMinimum[0]);
     }
 
     /// @notice Liquidate / Withdraw up to `_amountNeeded` of `want` of this strategy's positions, irregardless of slippage. Mellow Fearless Gearbox strategies have `periods` where wantTokens are locked up. If the Yearn strategy's tokens exist but are locked up, this function registers a withdraw to be called after `period` elapses and wantTokens from Gearbox credit account are freed up.
@@ -240,10 +250,13 @@ contract Strategy is BaseStrategy {
         // Cannot withdraw more than withdrawable
         _amountToWithdraw = Math.min(_primaryTokensToClaim, _amountToWithdraw);
 
+        // TODO - sort out what to put for vaultOptions
+        bytes[] memory vaultOptions = new bytes[](2);
+
         if (_primaryTokensToClaim > 0) {
             // gearboxRootVault doesn't allow amount specified for withdrawal
             // TODO - put checks here to ensure we are getting a minimal slippage, if any upon redemption
-            try gearboxRootVault.withdraw(address(this), "") {
+            try gearboxRootVault.withdraw(address(this), vaultOptions) {
                 uint256 _newLiquidAssets = wantBalance();
                 _liquidatedAmount = Math.min(_newLiquidAssets, _amountNeeded);
 
@@ -273,7 +286,7 @@ contract Strategy is BaseStrategy {
     }
 
     /// @inheritdoc BaseStrategy
-    /// NOTE - does this transfer want and non-want tokens? I've read different things throughout my research
+    /// @dev NOTE - does this transfer want and non-want tokens? I've read different things throughout my research
     function prepareMigration(address _newStrategy) internal override {
         // from angle strategy: wantToken is transferred by the base contract's migrate function
         // TODO - possibly transfer CRV
@@ -305,8 +318,8 @@ contract Strategy is BaseStrategy {
 
     /// @inheritdoc BaseStrategy
     /// @dev mellow fearless gearbox strategies have `periods` where wantToken is locked up in the strategy. Custom logic is required to check if there are `wantTokens` available to claim, or if totalPosition is locked up but has increased enough since initial `deposit`
-    /// TODO - Question - where does callCostinETH get used? How is it used to check that the gas cost of the call won't be too much?
-    function harvestTrigger(uint256 callCostinEth)
+    /// TODO - Question - where does callCostinWei get used? How is it used to check that the gas cost of the call won't be too much?
+    function harvestTrigger(uint256 callCostInWei)
         public
         view
         override
@@ -327,13 +340,7 @@ contract Strategy is BaseStrategy {
         return super.harvestTrigger(callCostInWei);
     }
 
-    /// @inheritdoc BaseStrategy
-    /// TODO: not sure if this address is the one to use still
-    function isBaseFeeAcceptable() internal view returns (bool) {
-        return
-            IBaseFee(0xb5e1CAcB567d98faaDB60a1fD4820720141f064F)
-                .isCurrentBaseFeeAcceptable();
-    }
+    /// TODO: not sure if we use the BaseStrategy isBaseFeeAcceptable()
 
     /// @notice The value in wETH that our claimable rewards are worth (18 decimals)
     function claimableProfit() public view returns (uint256) {
@@ -402,22 +409,23 @@ contract Strategy is BaseStrategy {
 
     // ---------------------- YSWAPS FUNCTIONS ----------------------
 
-    function setTradeFactory(address _tradeFactory) external onlyGovernance {
-        if (tradeFactory != address(0)) {
-            _removeTradeFactoryPermissions();
-        }
-        angleToken.safeApprove(_tradeFactory, type(uint256).max);
-        ITradeFactory tf = ITradeFactory(_tradeFactory);
-        tf.enable(address(angleToken), address(want));
-        tradeFactory = _tradeFactory;
-    }
+    // TODO - Sort these functions out for Mellow-Gearbox Strategy
+    // function setTradeFactory(address _tradeFactory) external onlyGovernance {
+    //     if (tradeFactory != address(0)) {
+    //         _removeTradeFactoryPermissions();
+    //     }
+    //     angleToken.safeApprove(_tradeFactory, type(uint256).max);
+    //     ITradeFactory tf = ITradeFactory(_tradeFactory);
+    //     tf.enable(address(angleToken), address(want));
+    //     tradeFactory = _tradeFactory;
+    // }
 
-    function removeTradeFactoryPermissions() external onlyEmergencyAuthorized {
-        _removeTradeFactoryPermissions();
-    }
+    // function removeTradeFactoryPermissions() external onlyEmergencyAuthorized {
+    //     _removeTradeFactoryPermissions();
+    // }
 
-    function _removeTradeFactoryPermissions() internal {
-        angleToken.safeApprove(tradeFactory, 0);
-        tradeFactory = address(0);
-    }
+    // function _removeTradeFactoryPermissions() internal {
+    //     angleToken.safeApprove(tradeFactory, 0);
+    //     tradeFactory = address(0);
+    // }
 }
