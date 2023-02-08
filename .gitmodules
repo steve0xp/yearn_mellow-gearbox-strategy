@@ -9,6 +9,3 @@
 	path = lib/yearn-vaults
 	url = https://github.com/yearn/yearn-vaults
 	branch = v0.4.5
-[submodule "lib/mellow-vaults"]
-	path = lib/mellow-vaults
-	url = https://github.com/mellow-finance/mellow-vaults

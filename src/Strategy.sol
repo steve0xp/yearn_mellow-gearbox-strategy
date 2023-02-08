@@ -54,12 +54,13 @@ contract Strategy is BaseStrategy {
 
     /// @notice setup w/ wETH vault, baseStrategy && Yearn Mellow Strategy
     /// @param _vault Yearn v2 vault allocating collateral to this strategy
-    /// @param _mellowRootVault specific root vault for Mellow-Gearbox strategies, specific to wantToken. ex.) wETH: 0xD3442BA55108d33FA1EB3F1a3C0876F892B01c44
-    constructor(address _vault, address _mellowRootVault)
-        public
+    // @param _mellowRootVault specific root vault for Mellow-Gearbox strategies, specific to wantToken. ex.) wETH: 0xD3442BA55108d33FA1EB3F1a3C0876F892B01c44
+    /// TODO - change constructor in test fixtures to respect 2 params, where 2nd param is `address _mellowRootVault`
+    constructor(address _vault)
+        
         BaseStrategy(_vault)
     {
-        _initializeStrategy(_mellowRootVault);
+        _initializeStrategy(0xD3442BA55108d33FA1EB3F1a3C0876F892B01c44);
     }
 
     /// SETTERS
@@ -326,14 +327,14 @@ contract Strategy is BaseStrategy {
         returns (bool)
     {
         // harvest if we have a profit to claim at our upper limit without considering gas price
-        uint256 claimableProfit = claimableProfit();
+        uint256 claimableTokens = claimableProfit();
 
-        if (claimableProfit > harvestProfitMax) {
+        if (claimableTokens > harvestProfitMax) {
             return true;
         }
 
         // harvest if we have a sufficient profit to claim, but only if our gas price is acceptable
-        if (claimableProfit > harvestProfitMin) {
+        if (claimableTokens > harvestProfitMin) {
             return true;
         }
 
@@ -388,9 +389,9 @@ contract Strategy is BaseStrategy {
     /// @return this contract's Mellow LPTs in `want` token denomination
     function valueOfMellowLPT() public view returns (uint256) {
         // calculate mellowLPTs waiting for claim * their epochRate
-        uint256 claimableLPT = gearboxRootVault.lpTokensWaitingForClaim[
+        uint256 claimableLPT = gearboxRootVault.lpTokensWaitingForClaim(
             address(this)
-        ]; // when no withdrawal registered, this will be 0.
+        ); // when no withdrawal registered, this will be 0.
 
         // calculate mellowLPTs in the strategy still
         uint256 inStrategyLPT = balanceOfMellowLPT() - claimableLPT; // when no withdrawal registered, this will be all of our position.
