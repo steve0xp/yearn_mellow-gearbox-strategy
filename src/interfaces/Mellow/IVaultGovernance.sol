@@ -19,14 +19,20 @@ interface IVaultGovernance {
 
     /// @notice Timestamp in unix time seconds after which staged Delayed Strategy Params could be committed.
     /// @param nft Nft of the vault
-    function delayedStrategyParamsTimestamp(uint256 nft) external view returns (uint256);
+    function delayedStrategyParamsTimestamp(uint256 nft)
+        external
+        view
+        returns (uint256);
 
     /// @notice Timestamp in unix time seconds after which staged Delayed Protocol Params could be committed.
     function delayedProtocolParamsTimestamp() external view returns (uint256);
 
     /// @notice Timestamp in unix time seconds after which staged Delayed Protocol Params Per Vault could be committed.
     /// @param nft Nft of the vault
-    function delayedProtocolPerVaultParamsTimestamp(uint256 nft) external view returns (uint256);
+    function delayedProtocolPerVaultParamsTimestamp(uint256 nft)
+        external
+        view
+        returns (uint256);
 
     /// @notice Timestamp in unix time seconds after which staged Internal Params could be committed.
     function internalParamsTimestamp() external view returns (uint256);
@@ -36,7 +42,10 @@ interface IVaultGovernance {
 
     /// @notice Staged new Internal Params.
     /// @dev The Internal Params could be committed after internalParamsTimestamp
-    function stagedInternalParams() external view returns (InternalParams memory);
+    function stagedInternalParams()
+        external
+        view
+        returns (InternalParams memory);
 
     // -------------------  EXTERNAL, MUTATING  -------------------
 

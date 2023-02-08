@@ -28,7 +28,13 @@ interface IVault is IERC165 {
     /// The tvl itself is estimated in some range. Sometimes the range is exact, sometimes it's not
     /// @return minTokenAmounts Lower bound for total available balances estimation (nth tokenAmount corresponds to nth token in vaultTokens)
     /// @return maxTokenAmounts Upper bound for total available balances estimation (nth tokenAmount corresponds to nth token in vaultTokens)
-    function tvl() external view returns (uint256[] memory minTokenAmounts, uint256[] memory maxTokenAmounts);
+    function tvl()
+        external
+        view
+        returns (
+            uint256[] memory minTokenAmounts,
+            uint256[] memory maxTokenAmounts
+        );
 
     /// @notice Existential amounts for each token
     function pullExistentials() external view returns (uint256[] memory);

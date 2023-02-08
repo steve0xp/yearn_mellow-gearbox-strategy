@@ -15,7 +15,10 @@ interface IVaultRoot {
     /// @notice Get index of subvault by nft
     /// @param nft_ Nft for getting subvault
     /// @return index Index of subvault
-    function subvaultOneBasedIndex(uint256 nft_) external view returns (uint256);
+    function subvaultOneBasedIndex(uint256 nft_)
+        external
+        view
+        returns (uint256);
 
     /// @notice Get all subvalutNfts in the current Vault
     /// @return subvaultNfts Subvaults of NTFs

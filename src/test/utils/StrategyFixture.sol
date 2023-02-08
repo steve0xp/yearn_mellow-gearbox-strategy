@@ -46,7 +46,7 @@ contract StrategyFixture is ExtendedTest {
     // @dev used for non-fuzz tests to test large amounts
     uint256 public bigAmount;
     // Used for integer approximation
-    uint256 public constant DELTA = 10 ** 5;
+    uint256 public constant DELTA = 10**5;
 
     function setUp() public virtual {
         _setTokenPrices();
@@ -57,14 +57,27 @@ contract StrategyFixture is ExtendedTest {
         weth = IERC20(tokenAddrs["WETH"]);
         want = IERC20(tokenAddrs[token]);
 
-        (address _vault, address _strategy) =
-            deployVaultAndStrategy(address(want), gov, rewards, "", "", guardian, management, keeper, strategist);
+        (address _vault, address _strategy) = deployVaultAndStrategy(
+            address(want),
+            gov,
+            rewards,
+            "",
+            "",
+            guardian,
+            management,
+            keeper,
+            strategist
+        );
         vault = IVault(_vault);
         strategy = Strategy(_strategy);
 
-        minFuzzAmt = 10 ** vault.decimals() / 10;
-        maxFuzzAmt = uint256(maxDollarNotional / tokenPrices[token]) * 10 ** vault.decimals();
-        bigAmount = uint256(bigDollarNotional / tokenPrices[token]) * 10 ** vault.decimals();
+        minFuzzAmt = 10**vault.decimals() / 10;
+        maxFuzzAmt =
+            uint256(maxDollarNotional / tokenPrices[token]) *
+            10**vault.decimals();
+        bigAmount =
+            uint256(bigDollarNotional / tokenPrices[token]) *
+            10**vault.decimals();
 
         // add more labels to make your traces readable
         vm.label(address(vault), "Vault");
@@ -97,7 +110,15 @@ contract StrategyFixture is ExtendedTest {
         IVault _vault = IVault(_vaultAddress);
 
         vm.prank(_gov);
-        _vault.initialize(_token, _gov, _rewards, _name, _symbol, _guardian, _management);
+        _vault.initialize(
+            _token,
+            _gov,
+            _rewards,
+            _name,
+            _symbol,
+            _guardian,
+            _management
+        );
 
         vm.prank(_gov);
         _vault.setDepositLimit(type(uint256).max);
@@ -124,7 +145,15 @@ contract StrategyFixture is ExtendedTest {
         address _keeper,
         address _strategist
     ) public returns (address _vaultAddr, address _strategyAddr) {
-        _vaultAddr = deployVault(_token, _gov, _rewards, _name, _symbol, _guardian, _management);
+        _vaultAddr = deployVault(
+            _token,
+            _gov,
+            _rewards,
+            _name,
+            _symbol,
+            _guardian,
+            _management
+        );
         IVault _vault = IVault(_vaultAddr);
 
         vm.prank(_strategist);
