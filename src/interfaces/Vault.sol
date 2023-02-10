@@ -24,13 +24,9 @@ interface IVault is IERC20 {
 
     function apiVersion() external pure returns (string memory);
 
-    function permit(
-        address owner,
-        address spender,
-        uint256 amount,
-        uint256 expiry,
-        bytes calldata signature
-    ) external returns (bool);
+    function permit(address owner, address spender, uint256 amount, uint256 expiry, bytes calldata signature)
+        external
+        returns (bool);
 
     function initialize(
         address token,
@@ -57,25 +53,18 @@ interface IVault is IERC20 {
 
     function deposit(uint256 amount) external returns (uint256);
 
-    function deposit(uint256 amount, address recipient)
-        external
-        returns (uint256);
+    function deposit(uint256 amount, address recipient) external returns (uint256);
 
     // NOTE: Vyper produces multiple signatures for a given function with "default" args
     function withdraw() external returns (uint256);
 
     function withdraw(uint256 maxShares) external returns (uint256);
 
-    function withdraw(uint256 maxShares, address recipient)
-        external
-        returns (uint256);
+    function withdraw(uint256 maxShares, address recipient) external returns (uint256);
 
     function token() external view returns (address);
 
-    function strategies(address _strategy)
-        external
-        view
-        returns (StrategyParams memory);
+    function strategies(address _strategy) external view returns (StrategyParams memory);
 
     function pricePerShare() external view returns (uint256);
 
@@ -114,11 +103,7 @@ interface IVault is IERC20 {
      * Strategy. Therefore, this function will be called by BaseStrategy to
      * make sure the integration is correct.
      */
-    function report(
-        uint256 _gain,
-        uint256 _loss,
-        uint256 _debtPayment
-    ) external returns (uint256);
+    function report(uint256 _gain, uint256 _loss, uint256 _debtPayment) external returns (uint256);
 
     /**
      * This function should only be used in the scenario where the Strategy is
@@ -140,14 +125,9 @@ interface IVault is IERC20 {
 
     function setManagementFee(uint256 fee) external;
 
-    function updateStrategyDebtRatio(address strategy, uint256 debtRatio)
-        external;
+    function updateStrategyDebtRatio(address strategy, uint256 debtRatio) external;
 
-    function withdraw(
-        uint256 maxShare,
-        address recipient,
-        uint256 maxLoss
-    ) external;
+    function withdraw(uint256 maxShare, address recipient, uint256 maxLoss) external;
 
     /**
      * View the governance address of the Vault to assert privileged functions

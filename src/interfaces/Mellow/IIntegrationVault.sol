@@ -14,11 +14,9 @@ interface IIntegrationVault is IVault, IERC1271 {
     /// @param tokenAmounts Amounts of tokens to push
     /// @param options Additional options that could be needed for some vaults. E.g. for Uniswap this could be `deadline` param. For the exact bytes structure see concrete vault descriptions
     /// @return actualTokenAmounts The amounts actually invested. It could be less than tokenAmounts (but not higher)
-    function push(
-        address[] memory tokens,
-        uint256[] memory tokenAmounts,
-        bytes memory options
-    ) external returns (uint256[] memory actualTokenAmounts);
+    function push(address[] memory tokens, uint256[] memory tokenAmounts, bytes memory options)
+        external
+        returns (uint256[] memory actualTokenAmounts);
 
     /// @notice The same as `push` method above but transfers tokens to vault balance prior to calling push.
     /// After the `push` it returns all the leftover tokens back (`push` method doesn't guarantee that tokenAmounts will be invested in full).
@@ -26,12 +24,9 @@ interface IIntegrationVault is IVault, IERC1271 {
     /// @param tokenAmounts Amounts of tokens to push
     /// @param options Additional options that could be needed for some vaults. E.g. for Uniswap this could be `deadline` param. For the exact bytes structure see concrete vault descriptions
     /// @return actualTokenAmounts The amounts actually invested. It could be less than tokenAmounts (but not higher)
-    function transferAndPush(
-        address from,
-        address[] memory tokens,
-        uint256[] memory tokenAmounts,
-        bytes memory options
-    ) external returns (uint256[] memory actualTokenAmounts);
+    function transferAndPush(address from, address[] memory tokens, uint256[] memory tokenAmounts, bytes memory options)
+        external
+        returns (uint256[] memory actualTokenAmounts);
 
     /// @notice Pulls tokens from the underlying protocol to the `to` address.
     /// @dev Can only be called but Vault Owner or Strategy. Vault owner is the owner of NFT for this vault in VaultManager.
@@ -49,20 +44,15 @@ interface IIntegrationVault is IVault, IERC1271 {
     /// @param tokenAmounts Amounts of tokens to pull
     /// @param options Additional options that could be needed for some vaults. E.g. for Uniswap this could be `deadline` param. For the exact bytes structure see concrete vault descriptions
     /// @return actualTokenAmounts The amounts actually withdrawn. It could be less than tokenAmounts (but not higher)
-    function pull(
-        address to,
-        address[] memory tokens,
-        uint256[] memory tokenAmounts,
-        bytes memory options
-    ) external returns (uint256[] memory actualTokenAmounts);
+    function pull(address to, address[] memory tokens, uint256[] memory tokenAmounts, bytes memory options)
+        external
+        returns (uint256[] memory actualTokenAmounts);
 
     /// @notice Claim ERC20 tokens from vault balance to zero vault.
     /// @dev Cannot be called from zero vault.
     /// @param tokens Tokens to claim
     /// @return actualTokenAmounts Amounts reclaimed
-    function reclaimTokens(address[] memory tokens)
-        external
-        returns (uint256[] memory actualTokenAmounts);
+    function reclaimTokens(address[] memory tokens) external returns (uint256[] memory actualTokenAmounts);
 
     /// @notice Execute one of whitelisted calls.
     /// @dev Can only be called by Vault Owner or Strategy. Vault owner is the owner of NFT for this vault in VaultManager.
@@ -74,9 +64,8 @@ interface IIntegrationVault is IVault, IERC1271 {
     /// @param selector Selector of the call
     /// @param data Abi encoded parameters to `to::selector`
     /// @return result Result of execution of the call
-    function externalCall(
-        address to,
-        bytes4 selector,
-        bytes memory data
-    ) external payable returns (bytes memory result);
+    function externalCall(address to, bytes4 selector, bytes memory data)
+        external
+        payable
+        returns (bytes memory result);
 }

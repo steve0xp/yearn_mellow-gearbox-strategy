@@ -13,8 +13,5 @@ interface IERC1271 {
     /// @param _hash Hash of the data to be signed
     /// @param _signature Signature byte array associated with _hash
     /// @return magicValue 0x1626ba7e if valid, 0xffffffff otherwise
-    function isValidSignature(bytes32 _hash, bytes memory _signature)
-        external
-        view
-        returns (bytes4 magicValue);
+    function isValidSignature(bytes32 _hash, bytes memory _signature) external view returns (bytes4 magicValue);
 }

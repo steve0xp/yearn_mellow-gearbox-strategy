@@ -49,28 +49,22 @@ interface IGearboxRootVault is IAggregateVault, IERC20 {
     /// @notice Remove depositors from the depositorsAllowlist
     /// @param depositors Array of depositors for remove
     /// @dev The action can be done only by user with admins, owners or by approved rights
-    function removeDepositorsFromAllowlist(address[] calldata depositors)
-        external;
+    function removeDepositorsFromAllowlist(address[] calldata depositors) external;
 
     /// @notice The function of depositing the amount of tokens in exchange
     /// @param tokenAmounts Array of amounts of tokens for deposit
     /// @param minLpTokens Minimal value of LP tokens
     /// @param vaultOptions Options of vaults
     /// @return actualTokenAmounts Arrays of actual token amounts after deposit
-    function deposit(
-        uint256[] memory tokenAmounts,
-        uint256 minLpTokens,
-        bytes memory vaultOptions
-    ) external returns (uint256[] memory actualTokenAmounts);
+    function deposit(uint256[] memory tokenAmounts, uint256 minLpTokens, bytes memory vaultOptions)
+        external
+        returns (uint256[] memory actualTokenAmounts);
 
     /// @notice Current epoch, where the epoch means the number of completed withdrawal executions plus 1
     function currentEpoch() external view returns (uint256);
 
     /// @notice Total value of lp tokens withdrawal requests during the current epoch
-    function totalCurrentEpochLpWitdrawalRequests()
-        external
-        view
-        returns (uint256);
+    function totalCurrentEpochLpWitdrawalRequests() external view returns (uint256);
 
     /// @notice Total value of lp tokens whose corresponding vault tokens are awaiting on the ERC20 vault to be claimed
     function totalLpTokensWaitingWithdrawal() external view returns (uint256);
@@ -84,10 +78,7 @@ interface IGearboxRootVault is IAggregateVault, IERC20 {
 
     /// @notice Total value of lp tokens whose corresponding vault tokens are awaiting on the ERC20 vault to be claimed for a specific address
     /// @param addr Address for which the request is made
-    function lpTokensWaitingForClaim(address addr)
-        external
-        view
-        returns (uint256);
+    function lpTokensWaitingForClaim(address addr) external view returns (uint256);
 
     /// @notice Total value of lp tokens withdrawal requests during the current epoch for a specific address
     /// @param addr Address for which the request is made
@@ -99,10 +90,7 @@ interface IGearboxRootVault is IAggregateVault, IERC20 {
 
     /// @notice The lp token price for a specific epoch end
     /// @param epoch Epoch for which the request is made
-    function epochToPriceForLpTokenD18(uint256 epoch)
-        external
-        view
-        returns (uint256);
+    function epochToPriceForLpTokenD18(uint256 epoch) external view returns (uint256);
 
     /// @notice The function of withdrawing the amount of tokens in exchange
     /// @param to Address to which the withdrawal will be sent
@@ -115,16 +103,12 @@ interface IGearboxRootVault is IAggregateVault, IERC20 {
     /// @notice The function of registering withdrawal of lp tokens amount
     /// @param lpTokenAmount Amount the sender wants to withdraw
     /// @return amountRegistered Amount which was actually registered
-    function registerWithdrawal(uint256 lpTokenAmount)
-        external
-        returns (uint256 amountRegistered);
+    function registerWithdrawal(uint256 lpTokenAmount) external returns (uint256 amountRegistered);
 
     /// @notice The function of cancelling withdrawal of lp tokens amount
     /// @param lpTokenAmount Amount the sender wants to cancel
     /// @return amountRemained Amount for which the withdrawal request remains
-    function cancelWithdrawal(uint256 lpTokenAmount)
-        external
-        returns (uint256 amountRemained);
+    function cancelWithdrawal(uint256 lpTokenAmount) external returns (uint256 amountRemained);
 
     /// @notice The function of invoking the execution of withdrawal orders and transfers corresponding funds to ERC20 vault
     function invokeExecution() external;

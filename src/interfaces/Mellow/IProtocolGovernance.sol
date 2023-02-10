@@ -24,18 +24,12 @@ interface IProtocolGovernance is IDefaultAccessControl, IUnitPricesGovernance {
     /// @notice Timestamp after which staged granted permissions for the given address can be committed.
     /// @param target The given address
     /// @return Zero if there are no staged permission grants, timestamp otherwise
-    function stagedPermissionGrantsTimestamps(address target)
-        external
-        view
-        returns (uint256);
+    function stagedPermissionGrantsTimestamps(address target) external view returns (uint256);
 
     /// @notice Staged granted permission bitmask for the given address.
     /// @param target The given address
     /// @return Bitmask
-    function stagedPermissionGrantsMasks(address target)
-        external
-        view
-        returns (uint256);
+    function stagedPermissionGrantsMasks(address target) external view returns (uint256);
 
     /// @notice Permission bitmask for the given address.
     /// @param target The given address
@@ -56,34 +50,22 @@ interface IProtocolGovernance is IDefaultAccessControl, IUnitPricesGovernance {
     function permissionAddresses() external view returns (address[] memory);
 
     /// @notice Permission addresses staged for commit.
-    function stagedPermissionGrantsAddresses()
-        external
-        view
-        returns (address[] memory);
+    function stagedPermissionGrantsAddresses() external view returns (address[] memory);
 
     /// @notice Return all addresses where rawPermissionMask bit for permissionId is set to 1.
     /// @param permissionId Id of the permission to check.
     /// @return A list of dirty addresses.
-    function addressesByPermission(uint8 permissionId)
-        external
-        view
-        returns (address[] memory);
+    function addressesByPermission(uint8 permissionId) external view returns (address[] memory);
 
     /// @notice Checks if address has permission or given permission is force allowed for any address.
     /// @param addr Address to check
     /// @param permissionId Permission to check
-    function hasPermission(address addr, uint8 permissionId)
-        external
-        view
-        returns (bool);
+    function hasPermission(address addr, uint8 permissionId) external view returns (bool);
 
     /// @notice Checks if address has all permissions.
     /// @param target Address to check
     /// @param permissionIds A list of permissions to check
-    function hasAllPermissions(address target, uint8[] calldata permissionIds)
-        external
-        view
-        returns (bool);
+    function hasAllPermissions(address target, uint8[] calldata permissionIds) external view returns (bool);
 
     /// @notice Max different ERC20 token addresses that could be managed by the protocol.
     function maxTokensPerVault() external view returns (uint256);
@@ -104,18 +86,12 @@ interface IProtocolGovernance is IDefaultAccessControl, IUnitPricesGovernance {
     function withdrawLimit(address token) external view returns (uint256);
 
     /// @notice Addresses that has staged validators.
-    function stagedValidatorsAddresses()
-        external
-        view
-        returns (address[] memory);
+    function stagedValidatorsAddresses() external view returns (address[] memory);
 
     /// @notice Timestamp after which staged granted permissions for the given address can be committed.
     /// @param target The given address
     /// @return Zero if there are no staged permission grants, timestamp otherwise
-    function stagedValidatorsTimestamps(address target)
-        external
-        view
-        returns (uint256);
+    function stagedValidatorsTimestamps(address target) external view returns (uint256);
 
     /// @notice Staged validator for the given address.
     /// @param target The given address
@@ -156,9 +132,7 @@ interface IProtocolGovernance is IDefaultAccessControl, IUnitPricesGovernance {
 
     /// @notice Commites all staged validators for which governance delay passed
     /// @return Addresses for which validators were committed
-    function commitAllValidatorsSurpassedDelay()
-        external
-        returns (address[] memory);
+    function commitAllValidatorsSurpassedDelay() external returns (address[] memory);
 
     /// @notice Rollback all staged granted permission grant.
     function rollbackStagedPermissionGrants() external;
@@ -170,15 +144,12 @@ interface IProtocolGovernance is IDefaultAccessControl, IUnitPricesGovernance {
 
     /// @notice Commites all staged permission grants for which governance delay passed.
     /// @return An array of addresses for which permission grants were committed.
-    function commitAllPermissionGrantsSurpassedDelay()
-        external
-        returns (address[] memory);
+    function commitAllPermissionGrantsSurpassedDelay() external returns (address[] memory);
 
     /// @notice Revoke permission instantly from the given address.
     /// @param target The given address.
     /// @param permissionIds A list of permission ids to revoke.
-    function revokePermissions(address target, uint8[] memory permissionIds)
-        external;
+    function revokePermissions(address target, uint8[] memory permissionIds) external;
 
     /// @notice Commits staged protocol params.
     /// Reverts if governance delay has not passed yet.
@@ -194,6 +165,5 @@ interface IProtocolGovernance is IDefaultAccessControl, IUnitPricesGovernance {
     /// Resets commit delay and permissions if there are already staged permissions for this address.
     /// @param target Target address
     /// @param permissionIds A list of permission ids to grant
-    function stagePermissionGrants(address target, uint8[] memory permissionIds)
-        external;
+    function stagePermissionGrants(address target, uint8[] memory permissionIds) external;
 }
