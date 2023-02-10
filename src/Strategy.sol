@@ -27,6 +27,7 @@ contract Strategy is BaseStrategy {
     uint256 public harvestProfitMin; // minimum size in wETH (18 decimals) that we want to harvest
     uint256 public harvestProfitMax; // maximum size in wETH (18 decimals) that we want to harvest
 
+
     /// EVENTS
 
     event Cloned(address indexed clone);
@@ -315,6 +316,13 @@ contract Strategy is BaseStrategy {
         return _amtInWei;
     }
 
+    // // TODO - not sure if this address is correct since it's over 500 days old, also not sure if we use this or go with: setBaseFeeOracle() route
+    // function isBaseFeeAcceptable() internal view returns (bool) {
+    //     return
+    //         IBaseFee(0xb5e1CAcB567d98faaDB60a1fD4820720141f064F)
+    //             .isCurrentBaseFeeAcceptable();
+    // }
+
     /// KEEP3RS
 
     /// @inheritdoc BaseStrategy
@@ -333,15 +341,30 @@ contract Strategy is BaseStrategy {
             return true;
         }
 
+        // check if the base fee gas price is higher than we allow. if it is, block harvests.
+        if (!isBaseFeeAcceptable()) {
+            return false;
+        }
+
+        // trigger if we want to manually harvest, but only if our gas price is acceptable
+        if (forceHarvestTriggerOnce) {
+            return true;
+        }
+
         // harvest if we have a sufficient profit to claim, but only if our gas price is acceptable
         if (claimableTokens > harvestProfitMin) {
             return true;
         }
 
-        return super.harvestTrigger(callCostInWei);
-    }
+        // return super.harvestTrigger(callCostInWei); // TODO - I believe since we have custom conditional logic, we should just override super.harvestTrigger()
 
-    /// TODO: not sure if we use the BaseStrategy isBaseFeeAcceptable()
+        // Should trigger if hasn't been called in a while
+        StrategyParams memory params = vault.strategies(address(this));
+        if ((block.timestamp - params.lastReport) >= maxReportDelay) return true;
+
+        // harvest our credit if it's above our threshold or return false
+        return (vault.creditAvailable() > creditThreshold);
+    }
 
     /// @notice The value in wETH that our claimable rewards are worth (18 decimals)
     function claimableProfit() public view returns (uint256) {
