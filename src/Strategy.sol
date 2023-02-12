@@ -6,8 +6,9 @@ import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
-import "./interfaces/IERC20Metadata.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20MetaData.sol";
 import {IGearboxRootVault} from "./interfaces/Mellow/IGearboxRootVault.sol";
+import {IERC20RootVaultGovernance} from "./interfaces/Mellow/IERC20RootVaultGovernance.sol";
 
 /// @title StrategyMellow-Gearbox_wETH: Yearn strategy for Mellow Fearless Gearboxstrategy
 /// @author @steve0xp && @0xValJohn
@@ -28,6 +29,9 @@ contract Strategy is BaseStrategy {
     constructor(address _vault, address _mellowRootVault) BaseStrategy(_vault) {
         _initializeStrategy(_mellowRootVault);
     }
+
+    /// @inheritdoc IGearboxRootVault
+    uint256 public lpPriceHighWaterMarkD18;
 
     function _initializeStrategy(address _mellowRootVault) internal {
         gearboxRootVault = IGearboxRootVault(_mellowRootVault);
@@ -102,7 +106,28 @@ contract Strategy is BaseStrategy {
             uint256[] memory _amountToInvest = new uint256[](1);
             _amountToInvest[0] = wantBalance - _debtOutstanding;
             uint256 _minLpToMint = 0; // @todo add minimum LP amount to receive
-            gearboxRootVault.deposit(_amountToInvest, _minLpToMint, ""); // @todo investigate vaultOptions
+
+            uint256 thisNft = _nft();
+
+            IERC20RootVaultGovernance.StrategyParams memory params =
+                (IERC20RootVaultGovernance(gearboxRootVault.vaultGovernance())).strategyParams(thisNft);
+
+            uint256 lpSupply = (
+                gearboxRootVault.totalSupply() - gearboxRootVault.totalLpTokensWaitingWithdrawal()
+                    - _chargeFees(thisNFT, gearboxRootVault.tvl(), gearboxRootVault.totalSupply())
+            );
+
+            uint256 totalWantCapacityRemaining =
+                (gearboxRootVault.tvl() * ((params.tokenLimit() - lpSupply) * 1e18 / lpSupply)) / 1e18;
+
+            require(totalWantCapacityRemaining == 0, "Vault want capacity at max");
+
+            if (totalWantCapacityRemaining < _amountToInvest) {
+                gearboxRootVault.deposit(_amountToInvest, _minLpToMint, ""); // @todo investigate vaultOptions
+            } else {
+                gearboxRootVault.deposit(totalWantCapacityRemaining, _minLpToMint, ""); // @todo investigate vaultOptions
+                    // @todo emit event showcasing that not entire excess was deposited because of vault hitting its max?
+            }
         }
     }
 
@@ -252,5 +277,89 @@ contract Strategy is BaseStrategy {
             return 0;
         }
         return _claimableProfit;
+    }
+
+    /* ========== MELLOW INTERNAL FUNCTIONS ========== */
+
+    /// @dev we are charging fees on the deposit / withdrawal
+    /// fees are charged before the tokens transfer and change the balance of the lp tokens
+    /// @dev modified to return amount that would be minted for fee (in LPTokens). NOTE I modified _chargeManagementFees() & _chargePerformanceFees() accordingly
+    function _chargeFees(uint256 thisNft, uint256 tvl, uint256 supply) internal view returns (uint256) {
+        IERC20RootVaultGovernance vg = IERC20RootVaultGovernance(address(_vaultGovernance));
+        uint256 elapsed = block.timestamp - uint256(lastFeeCharge);
+        IERC20RootVaultGovernance.DelayedProtocolParams memory delayedProtocolParams = vg.delayedProtocolParams();
+        if (elapsed < delayedProtocolParams.managementFeeChargeDelay || supply == 0) {
+            return;
+        }
+
+        lastFeeCharge = uint64(block.timestamp);
+        IERC20RootVaultGovernance.DelayedStrategyParams memory strategyParams = vg.delayedStrategyParams(thisNft);
+        uint256 protocolFee = vg.delayedProtocolPerVaultParams(thisNft).protocolFee;
+        address protocolTreasury = vg.internalParams().protocolGovernance.protocolTreasury();
+
+        // as per convo w/ Dmitriy
+        (uint256 _mgmtFeesToBeImposed, uint256 protocolFeeToBeImposed) = _chargeManagementFees(
+            strategyParams.managementFee,
+            protocolFee,
+            strategyParams.strategyTreasury,
+            protocolTreasury,
+            elapsed,
+            supply
+        );
+
+        uint256 _perfFeesToBeImposed = _chargePerformanceFees(
+            supply, tvl, strategyParams.performanceFee, strategyParams.strategyPerformanceTreasury
+        );
+
+        uint256 totalFees = _mgmtFeesToBeImposed + protocolFeeToBeImposed + _perfFeesToBeImposed;
+
+        return totalFees;
+    }
+
+    function _chargeManagementFees(
+        uint256 managementFee,
+        uint256 protocolFee,
+        address strategyTreasury,
+        address protocolTreasury,
+        uint256 elapsed,
+        uint256 lpSupply
+    ) internal view returns (uint256 mgmtFee, uint256 protocolFee) {
+        uin256 mgmtFee = 0;
+        uint256 protocolFee = 0;
+
+        if (managementFee > 0) {
+            mgmtFee = FullMath.mulDiv(managementFee * elapsed, lpSupply, CommonLibrary.YEAR * CommonLibrary.DENOMINATOR);
+        }
+        if (protocolFee > 0) {
+            protocolFee =
+                FullMath.mulDiv(protocolFee * elapsed, lpSupply, CommonLibrary.YEAR * CommonLibrary.DENOMINATOR);
+        }
+    }
+
+    function _chargePerformanceFees(uint256 baseSupply, uint256 tvl, uint256 performanceFee, address treasury)
+        internal
+        view
+        returns (uint256)
+    {
+        if (performanceFee == 0) {
+            return 0;
+        }
+
+        // todo - not sure about CommonLibrary or lpPriceHighWaterMarkD18
+        uint256 lpPriceD18 = FullMath.mulDiv(tvl, CommonLibrary.D18, baseSupply);
+        uint256 hwmsD18 = lpPriceHighWaterMarkD18;
+        if (lpPriceD18 <= hwmsD18) {
+            return 0;
+        }
+
+        uint256 toMint;
+        if (hwmsD18 > 0) {
+            toMint = FullMath.mulDiv(baseSupply, lpPriceD18 - hwmsD18, hwmsD18);
+            toMint = FullMath.mulDiv(toMint, performanceFee, CommonLibrary.DENOMINATOR);
+            return (toMint);
+        }
+
+        // not sure I need this but kept the other math as per convo with Dmitriy
+        gearboxRootvault.lpPriceHighWaterMarkD18 = lpPriceD18;
     }
 }
