@@ -100,17 +100,17 @@ contract Strategy is BaseStrategy {
     }
 
     function adjustPosition(uint256 _debtOutstanding) internal override {
-        uint256 wantBalance = wantBalance();
+        uint256 newWantBalance = wantBalance();
 
-        if (wantBalance > _debtOutstanding) {
+        if (newWantBalance > _debtOutstanding) {
             uint256[] memory _amountToInvest = new uint256[](1);
-            _amountToInvest[0] = wantBalance - _debtOutstanding;
+            _amountToInvest[0] = newWantBalance - _debtOutstanding;
             uint256 _minLpToMint = 0; // @todo add minimum LP amount to receive
 
-            uint256 thisNft = _nft();
+            uint256 thisNFT = gearboxRootVault.nft();
 
             IERC20RootVaultGovernance.StrategyParams memory params =
-                (IERC20RootVaultGovernance(gearboxRootVault.vaultGovernance())).strategyParams(thisNft);
+                (IERC20RootVaultGovernance(gearboxRootVault.vaultGovernance())).strategyParams(thisNFT);
 
             uint256 lpSupply = (
                 gearboxRootVault.totalSupply() - gearboxRootVault.totalLpTokensWaitingWithdrawal()
@@ -126,7 +126,7 @@ contract Strategy is BaseStrategy {
                 gearboxRootVault.deposit(_amountToInvest, _minLpToMint, ""); // @todo investigate vaultOptions
             } else {
                 gearboxRootVault.deposit(totalWantCapacityRemaining, _minLpToMint, ""); // @todo investigate vaultOptions
-                    // @todo emit event showcasing that not entire excess was deposited because of vault hitting its max?
+                // @todo emit event showcasing that not entire excess was deposited because of vault hitting its max?
             }
         }
     }
@@ -284,17 +284,16 @@ contract Strategy is BaseStrategy {
     /// @dev we are charging fees on the deposit / withdrawal
     /// fees are charged before the tokens transfer and change the balance of the lp tokens
     /// @dev modified to return amount that would be minted for fee (in LPTokens). NOTE I modified _chargeManagementFees() & _chargePerformanceFees() accordingly
-    function _chargeFees(uint256 thisNft, uint256 tvl, uint256 supply) internal view returns (uint256) {
-        IERC20RootVaultGovernance vg = IERC20RootVaultGovernance(address(_vaultGovernance));
-        uint256 elapsed = block.timestamp - uint256(lastFeeCharge);
+    function _chargeFees(uint256 thisNFT, uint256 tvl, uint256 supply) internal view returns (uint256) {
+        IERC20RootVaultGovernance vg = IERC20RootVaultGovernance(address(gearboxRootVault.vaultGovernance()));
+        uint256 elapsed = block.timestamp - uint256(gearboxRootVault.lastFeeCharge());
         IERC20RootVaultGovernance.DelayedProtocolParams memory delayedProtocolParams = vg.delayedProtocolParams();
         if (elapsed < delayedProtocolParams.managementFeeChargeDelay || supply == 0) {
             return;
         }
 
-        lastFeeCharge = uint64(block.timestamp);
-        IERC20RootVaultGovernance.DelayedStrategyParams memory strategyParams = vg.delayedStrategyParams(thisNft);
-        uint256 protocolFee = vg.delayedProtocolPerVaultParams(thisNft).protocolFee;
+        IERC20RootVaultGovernance.DelayedStrategyParams memory strategyParams = vg.delayedStrategyParams(thisNFT);
+        uint256 protocolFee = vg.delayedProtocolPerVaultParams(thisNFT).protocolFee;
         address protocolTreasury = vg.internalParams().protocolGovernance.protocolTreasury();
 
         // as per convo w/ Dmitriy
@@ -323,15 +322,15 @@ contract Strategy is BaseStrategy {
         address protocolTreasury,
         uint256 elapsed,
         uint256 lpSupply
-    ) internal view returns (uint256 mgmtFee, uint256 protocolFee) {
-        uin256 mgmtFee = 0;
-        uint256 protocolFee = 0;
+    ) internal view returns (uint256 mgmtFee, uint256 newProtocolFee) {
+        mgmtFee = 0;
+        uint256 newProtocolFee = 0;
 
         if (managementFee > 0) {
             mgmtFee = FullMath.mulDiv(managementFee * elapsed, lpSupply, CommonLibrary.YEAR * CommonLibrary.DENOMINATOR);
         }
         if (protocolFee > 0) {
-            protocolFee =
+            newProtocolFee =
                 FullMath.mulDiv(protocolFee * elapsed, lpSupply, CommonLibrary.YEAR * CommonLibrary.DENOMINATOR);
         }
     }
@@ -360,6 +359,6 @@ contract Strategy is BaseStrategy {
         }
 
         // not sure I need this but kept the other math as per convo with Dmitriy
-        gearboxRootvault.lpPriceHighWaterMarkD18 = lpPriceD18;
+        gearboxRootVault.lpPriceHighWaterMarkD18 = lpPriceD18;
     }
 }
