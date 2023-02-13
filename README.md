@@ -1,3 +1,40 @@
+# 🏄‍♀️⚙️ Yearn Mellow-Gearbox_wETH Strategy | _(AKA Mellowed-Out wETH Strategy)_
+## **Strategy Details**
+
+This strategy simply deploys wETH from Yearn wETH Vault to the Mellow Fearless Gearbox wETH Strategy.
+
+There are attractive yields on the Gearbox protocol only accessible to approved credit managers, and Mellow is one of them. Yearn will/is explore being approved by Gearbox protocol, but in the interim strives to offer yield to Yearn users by accessing Gearbox yields via Mellow Protocol.
+
+> 🔍 Additional reasoning can be found in the Due Diligence document [here](https://hackmd.io/@yaSscTAySm-9M5DU5kgpIA/BkeZ00eKi).
+
+> 🚨 Please note, this repo is still under development and the code is not ready, tested, or audited. See active project tasks for most up to date areas of focus.
+
+💬 Feel free to open up any issues as you see fit!
+
+---
+
+## Unique Aspects of this Strategy
+
+**`harvest()` sequence**
+
+Typically, yearn strategies have three asset flow scenarios:
+
+1. Increase DR - vault function `deposit()` is used to deposit funds to strategy. Strategy gets adjusted next time bot calls `harvest()` which also acts as an accounting event.
+   - `harvest()` calls `adjustPosition()` which then deposits `wantToken` into strategy assuming `_debtOutstanding` = 0.
+   
+2. Decrease DR - vault function `withdraw()` is used to withdraw a specified `_debtOutstanding` from strategy. Strategy calls `prepareReturn(_debtOutstanding)` which then does the accounting to see if a profit was made or not in this `harvest`. From there it uses `liquidate(_debtOutstanding)` to exit the strategy with required amount of `wantToken`
+
+3. Keep DR and `tend()` yields: this is not used as much.
+
+From the above three sequences, we can see a pattern needed in this strategy specifically:
+
+1. For withdrawals: Each time `harvest(_debtOutstanding)` is called, the sequence is delayed by one `harvest()` AT LEAST (it really is based on when the `period` ends in the mellow-gearbox strategy). Okay, so `harvest()` calls `prepareReturn()` which calls `estimatedTotalAssets()` to report a profit or loss. `estimateTotalAssets()` needs to only count **claimable** `wantToken` per `harvest`. This is because `harvest()` ends up being an accounting event && a readjustment event for the strategy from the vault. 
+- estimatedTotalAssets() = wantToken.balanceOf(address(this)) + <conversion of mellow LPTs in strategy.sol to wantTokens in mellow strategy>
+
+
+<details markdown='1'><summary>  README Details from storming0x Template Repo
+ </summary>
+
 # Yearn Strategy Foundry Mix
 
 ## What you'll find here
@@ -126,3 +163,6 @@ Note though that to make this work, you must set your `INFURA_API_KEY` and your 
 - [Awesome Foundry](https://github.com/crisgarner/awesome-foundry)
 - [Foundry Book](https://book.getfoundry.sh/)
 - [Learn Foundry Tutorial](https://www.youtube.com/watch?v=Rp_V7bYiTCM)
+
+ </details>
+

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.12;
+
 import "forge-std/console.sol";
 
 import {StrategyFixture} from "./utils/StrategyFixture.sol";
@@ -229,11 +230,7 @@ contract StrategyOperationsTest is StrategyFixture {
         assertEq(weth.balanceOf(user), 0);
         vm.prank(gov);
         strategy.sweep(address(weth));
-        assertRelApproxEq(
-            weth.balanceOf(gov),
-            wethAmount + beforeBalance,
-            DELTA
-        );
+        assertRelApproxEq(weth.balanceOf(gov), wethAmount + beforeBalance, DELTA);
     }
 
     function testTriggers(uint256 _amount) public {
