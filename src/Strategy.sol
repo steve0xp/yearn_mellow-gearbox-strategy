@@ -11,6 +11,7 @@ import {IGearboxRootVault} from "./interfaces/Mellow/IGearboxRootVault.sol";
 import {IERC20RootVaultGovernance} from "./interfaces/Mellow/IERC20RootVaultGovernance.sol";
 import "./utils/Mellow/ExceptionsLibrary.sol";
 import "./utils/Mellow/CommonLibrary.sol";
+import "./utils/Mellow/FullMath.sol";
 
 /// @title StrategyMellow-Gearbox_wETH: Yearn strategy for Mellow Fearless Gearboxstrategy
 /// @author @steve0xp && @0xValJohn
@@ -32,8 +33,7 @@ contract Strategy is BaseStrategy {
         _initializeStrategy(_mellowRootVault);
     }
 
-    /// @inheritdoc IGearboxRootVault
-    uint256 public lpPriceHighWaterMarkD18;
+    uint256 public lpPriceHighWaterMarkD18; // from IGearboxRootVault
 
     function _initializeStrategy(address _mellowRootVault) internal {
         gearboxRootVault = IGearboxRootVault(_mellowRootVault);
@@ -111,20 +111,24 @@ contract Strategy is BaseStrategy {
 
             uint256 thisNFT = gearboxRootVault.nft();
 
+            address vaultGovernance = address(gearboxRootVault.vaultGovernance());
             IERC20RootVaultGovernance.StrategyParams memory params =
-                (IERC20RootVaultGovernance(gearboxRootVault.vaultGovernance())).strategyParams(thisNFT);
+                (IERC20RootVaultGovernance(vaultGovernance)).strategyParams(thisNFT);
+
+            (uint256[] memory minTvl,) = gearboxRootVault.tvl();
 
             uint256 lpSupply = (
                 gearboxRootVault.totalSupply() - gearboxRootVault.totalLpTokensWaitingWithdrawal()
-                    - _chargeFees(thisNFT, gearboxRootVault.tvl(), gearboxRootVault.totalSupply())
+                    - _chargeFees(thisNFT, minTvl[0], gearboxRootVault.totalSupply())
             );
 
-            uint256 totalWantCapacityRemaining =
-                (gearboxRootVault.tvl() * ((params.tokenLimit() - lpSupply) * 1e18 / lpSupply)) / 1e18;
+            uint256[] memory totalWantCapacityRemaining = new uint256[](1);
 
-            require(totalWantCapacityRemaining == 0, "Vault want capacity at max");
+            totalWantCapacityRemaining[0] = (minTvl[0] * ((params.tokenLimit - lpSupply) * 1e18 / lpSupply)) / 1e18;
 
-            if (totalWantCapacityRemaining > _amountToInvest) {
+            require(totalWantCapacityRemaining[0] == 0, "Vault want capacity at max");
+
+            if (totalWantCapacityRemaining[0] > _amountToInvest[0]) {
                 gearboxRootVault.deposit(_amountToInvest, _minLpToMint, ""); // @todo investigate vaultOptions
             } else {
                 gearboxRootVault.deposit(totalWantCapacityRemaining, _minLpToMint, ""); // @todo investigate vaultOptions
@@ -283,15 +287,14 @@ contract Strategy is BaseStrategy {
 
     /* ========== MELLOW INTERNAL FUNCTIONS ========== */
 
-    /// @dev we are charging fees on the deposit / withdrawal
-    /// fees are charged before the tokens transfer and change the balance of the lp tokens
-    /// @dev modified to return amount that would be minted for fee (in LPTokens). NOTE I modified _chargeManagementFees() & _chargePerformanceFees() accordingly
+    /// @dev we are charging fees on the deposit / withdrawal. fees are charged before the tokens transfer and change the balance of the lp tokens.
+    /// I modified these copied functions, from mellow (incl. libraries), so there is a return amount that instead of minting more tokens (in LPTokens). I modified _chargeManagementFees() & _chargePerformanceFees() accordingly too
     function _chargeFees(uint256 thisNFT, uint256 tvl, uint256 supply) internal view returns (uint256) {
         IERC20RootVaultGovernance vg = IERC20RootVaultGovernance(address(gearboxRootVault.vaultGovernance()));
         uint256 elapsed = block.timestamp - uint256(gearboxRootVault.lastFeeCharge());
         IERC20RootVaultGovernance.DelayedProtocolParams memory delayedProtocolParams = vg.delayedProtocolParams();
         if (elapsed < delayedProtocolParams.managementFeeChargeDelay || supply == 0) {
-            return;
+            return 0;
         }
 
         IERC20RootVaultGovernance.DelayedStrategyParams memory strategyParams = vg.delayedStrategyParams(thisNFT);
@@ -299,32 +302,21 @@ contract Strategy is BaseStrategy {
         address protocolTreasury = vg.internalParams().protocolGovernance.protocolTreasury();
 
         // as per convo w/ Dmitriy
-        (uint256 _mgmtFeesToBeImposed, uint256 protocolFeeToBeImposed) = _chargeManagementFees(
-            strategyParams.managementFee,
-            protocolFee,
-            strategyParams.strategyTreasury,
-            protocolTreasury,
-            elapsed,
-            supply
-        );
+        (uint256 _mgmtFeesToBeImposed, uint256 protocolFeeToBeImposed) =
+            _chargeManagementFees(strategyParams.managementFee, protocolFee, elapsed, supply);
 
-        uint256 _perfFeesToBeImposed = _chargePerformanceFees(
-            supply, tvl, strategyParams.performanceFee, strategyParams.strategyPerformanceTreasury
-        );
+        uint256 _perfFeesToBeImposed = _chargePerformanceFees(supply, tvl, strategyParams.performanceFee);
 
         uint256 totalFees = _mgmtFeesToBeImposed + protocolFeeToBeImposed + _perfFeesToBeImposed;
 
         return totalFees;
     }
 
-    function _chargeManagementFees(
-        uint256 managementFee,
-        uint256 protocolFee,
-        address strategyTreasury,
-        address protocolTreasury,
-        uint256 elapsed,
-        uint256 lpSupply
-    ) internal view returns (uint256 mgmtFee, uint256 newProtocolFee) {
+    function _chargeManagementFees(uint256 managementFee, uint256 protocolFee, uint256 elapsed, uint256 lpSupply)
+        internal
+        view
+        returns (uint256 mgmtFee, uint256 newProtocolFee)
+    {
         mgmtFee = 0;
         newProtocolFee = 0;
 
@@ -337,7 +329,7 @@ contract Strategy is BaseStrategy {
         }
     }
 
-    function _chargePerformanceFees(uint256 baseSupply, uint256 tvl, uint256 performanceFee, address treasury)
+    function _chargePerformanceFees(uint256 baseSupply, uint256 tvl, uint256 performanceFee)
         internal
         view
         returns (uint256)
@@ -346,7 +338,6 @@ contract Strategy is BaseStrategy {
             return 0;
         }
 
-        // todo - not sure about CommonLibrary or lpPriceHighWaterMarkD18
         uint256 lpPriceD18 = FullMath.mulDiv(tvl, CommonLibrary.D18, baseSupply);
         uint256 hwmsD18 = lpPriceHighWaterMarkD18;
         if (lpPriceD18 <= hwmsD18) {
@@ -359,8 +350,5 @@ contract Strategy is BaseStrategy {
             toMint = FullMath.mulDiv(toMint, performanceFee, CommonLibrary.DENOMINATOR);
             return (toMint);
         }
-
-        // not sure I need this but kept the other math as per convo with Dmitriy
-        gearboxRootVault.lpPriceHighWaterMarkD18 = lpPriceD18;
     }
 }
