@@ -9,6 +9,8 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/interfaces/IERC20MetaData.sol";
 import {IGearboxRootVault} from "./interfaces/Mellow/IGearboxRootVault.sol";
 import {IERC20RootVaultGovernance} from "./interfaces/Mellow/IERC20RootVaultGovernance.sol";
+import "./utils/Mellow/ExceptionsLibrary.sol";
+import "./utils/Mellow/CommonLibrary.sol";
 
 /// @title StrategyMellow-Gearbox_wETH: Yearn strategy for Mellow Fearless Gearboxstrategy
 /// @author @steve0xp && @0xValJohn
@@ -122,11 +124,11 @@ contract Strategy is BaseStrategy {
 
             require(totalWantCapacityRemaining == 0, "Vault want capacity at max");
 
-            if (totalWantCapacityRemaining < _amountToInvest) {
+            if (totalWantCapacityRemaining > _amountToInvest) {
                 gearboxRootVault.deposit(_amountToInvest, _minLpToMint, ""); // @todo investigate vaultOptions
             } else {
                 gearboxRootVault.deposit(totalWantCapacityRemaining, _minLpToMint, ""); // @todo investigate vaultOptions
-                // @todo emit event showcasing that not entire excess was deposited because of vault hitting its max?
+                    // @todo emit event showcasing that not entire excess was deposited because of vault hitting its max?
             }
         }
     }
@@ -324,7 +326,7 @@ contract Strategy is BaseStrategy {
         uint256 lpSupply
     ) internal view returns (uint256 mgmtFee, uint256 newProtocolFee) {
         mgmtFee = 0;
-        uint256 newProtocolFee = 0;
+        newProtocolFee = 0;
 
         if (managementFee > 0) {
             mgmtFee = FullMath.mulDiv(managementFee * elapsed, lpSupply, CommonLibrary.YEAR * CommonLibrary.DENOMINATOR);
