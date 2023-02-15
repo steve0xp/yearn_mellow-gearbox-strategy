@@ -57,12 +57,12 @@ contract StrategyFixture is ExtendedTest {
         // USDC: 0x34c277B0c690936168cF436B904B2242a11E7eeA (full)
 
         // Choose a token from the tokenAddrs mapping, see _setTokenAddrs for options
-        string memory token = "DAI";
+        string memory token = "WETH";
         weth = IERC20(tokenAddrs["WETH"]);
         want = IERC20(tokenAddrs[token]);
 
         (address _vault, address _strategy) =
-            deployVaultAndStrategy(address(want), gov, rewards, "", "", guardian, management, keeper, strategist);
+            deployVaultAndStrategy(address(want), gov, rewards, "yMellowVault", "yv-Mellow-WETH", guardian, management, keeper, strategist);
         vault = IVault(_vault);
         strategy = Strategy(_strategy);
 
