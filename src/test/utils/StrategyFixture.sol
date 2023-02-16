@@ -7,6 +7,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {ExtendedTest} from "./ExtendedTest.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {IVault} from "../../interfaces/Vault.sol";
+import "forge-std/console.sol";
 
 // NOTE: if the name of the strat or file changes this needs to be updated
 import {Strategy} from "../../Strategy.sol";
@@ -61,12 +62,17 @@ contract StrategyFixture is ExtendedTest {
         weth = IERC20(tokenAddrs["WETH"]);
         want = IERC20(tokenAddrs[token]);
 
-        (address _vault, address _strategy) =
-            deployVaultAndStrategy(address(want), gov, rewards, "yMellowVault", "yv-Mellow-WETH", guardian, management, keeper, strategist);
+        (address _vault, address _strategy) = deployVaultAndStrategy(
+            address(want), gov, rewards, "yMellowVault", "yv-Mellow-WETH", guardian, management, keeper, strategist
+        );
         vault = IVault(_vault);
         strategy = Strategy(_strategy);
 
         minFuzzAmt = 10 ** vault.decimals() / 10;
+        console.log(
+            "This is a test: vault decimals is %s, && maxDollarNotional is %s", vault.decimals(), maxDollarNotional
+        );
+
         maxFuzzAmt = uint256(maxDollarNotional / tokenPrices[token]) * 10 ** vault.decimals();
         bigAmount = uint256(bigDollarNotional / tokenPrices[token]) * 10 ** vault.decimals();
 
@@ -101,8 +107,8 @@ contract StrategyFixture is ExtendedTest {
         IVault _vault = IVault(_vaultAddress);
 
         vm.prank(_gov);
-        _vault.initialize(_token, _gov, _rewards, _name, _symbol, _guardian, _management);
 
+        _vault.initialize(_token, _gov, _rewards, _name, _symbol, _guardian, _management);
         vm.prank(_gov);
         _vault.setDepositLimit(type(uint256).max);
 
