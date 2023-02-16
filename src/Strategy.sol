@@ -142,7 +142,7 @@ contract Strategy is BaseStrategy {
                 lpSupply
             );
 
-            // TODO - BELOW IS THE LOC THAT IS CAUSING UNDERFLOW ERRORS
+            // @todo - BELOW IS THE LOC THAT IS CAUSING UNDERFLOW ERRORS
             totalWantCapacityRemaining[0] = (minTvl[0] * ((params.tokenLimit - lpSupply) * 1e18 / lpSupply)) / 1e18;
 
             require(totalWantCapacityRemaining[0] == 0, "Vault want capacity at max");
