@@ -145,7 +145,7 @@ contract Strategy is BaseStrategy {
             // @todo - BELOW IS THE LOC THAT IS CAUSING UNDERFLOW ERRORS
             totalWantCapacityRemaining[0] = (minTvl[0] * ((params.tokenLimit - lpSupply) * 1e18 / lpSupply)) / 1e18;
 
-            require(totalWantCapacityRemaining[0] == 0, "Vault want capacity at max");
+            require(lpSupply < totalWantCapacityRemaining[0], "Vault want capacity at max"); // @todo check if a revert is okay with yearn strategy harvest() sequences
 
             if (totalWantCapacityRemaining[0] > _amountToInvest[0]) {
                 gearboxRootVault.deposit(_amountToInvest, _minLpToMint, ""); // @todo investigate vaultOptions

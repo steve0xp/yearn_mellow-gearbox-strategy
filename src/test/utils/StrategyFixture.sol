@@ -53,9 +53,10 @@ contract StrategyFixture is ExtendedTest {
         _setTokenPrices();
         _setTokenAddrs();
 
-        // @todo _mellowRootVault to test:
-        // WETH: 0xa2607696699dbF3c4de584e244f4E3df58cdf69c (partially filled)
-        // USDC: 0x34c277B0c690936168cF436B904B2242a11E7eeA (full)
+        // @todo replace the following addresses with proper ones once Mellow has them setup (ref - convos w/ them) - see issue #20
+        // Root Vault:  0xD3442BA55108d33FA1EB3F1a3C0876F892B01c44
+        // ERC20 Vault:  0x27E3E8E275523850236485FE2341e55689a81Bb1
+        // Gearbox Vault:  0x3e80E11C8fD3e05221fE63BE3487f9f0A4316Dc8
 
         // Choose a token from the tokenAddrs mapping, see _setTokenAddrs for options
         string memory token = "WETH";
@@ -117,7 +118,7 @@ contract StrategyFixture is ExtendedTest {
 
     // Deploys a strategy
     function deployStrategy(address _vault) public returns (address) {
-        address _mellowRootVault = 0xa2607696699dbF3c4de584e244f4E3df58cdf69c;
+        address _mellowRootVault = 0xD3442BA55108d33FA1EB3F1a3C0876F892B01c44;
         Strategy _strategy = new Strategy(_vault, _mellowRootVault);
 
         return address(_strategy);
