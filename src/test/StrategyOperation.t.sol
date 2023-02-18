@@ -43,12 +43,19 @@ contract StrategyOperationsTest is StrategyFixture {
         assertRelApproxEq(want.balanceOf(address(vault)), _amount, DELTA);
 
         skip(3 minutes); // why 3 minutes? Is there something specific with this small timespan?
+        uint256 lptBalancerBefore = lpt.balanceOf(strategist);
+        assert(lptBalancerBefore == 0);
         vm.prank(strategist);
         strategy.harvest();
         assertRelApproxEq(strategy.estimatedTotalAssets(), _amount, DELTA);
 
-        // todo Check LP balance for mellow tokens has changed for yearn strategy. NOTE - wantTokens will be in MV, but not necessarily in gearbox credit account (CA).
-        // todo Check that wantToken for yearn vault has equates to the appropriate amounts sum(mellowLP * wantEpochPrice_respective).
+        // todo Check LP balance for mellow tokens has changed for yearn strategy. NOTE - wantTokens will be in MV, but not necessarily in gearbox credit account (CA). 
+        // **Check mellow vault to see how many tokens have been deposited, and how many LPTs we've gotten.
+        uint256 currentEpochLPTPriceD18 = _getCurrentEpochLPTPriceD18();
+        uint256 lptBalanceAfter = lpt.balanceOf(strategist);
+        uint256 expectedLptBalanceAfter = (balanceBefore * 1e18) / currentEpochLPTPriceD18;
+
+        assertRelApproxEq(lptBalanceAfter, expectedLptBalanceAfter, DELTA); // todo - not sure about DELTA
 
         // tend
         vm.prank(strategist);
@@ -108,17 +115,28 @@ contract StrategyOperationsTest is StrategyFixture {
         strategy.harvest();
         assertRelApproxEq(strategy.estimatedTotalAssets(), _amount, DELTA);
 
+        uint256 balanceAfter = want.balanceOf(strategist);
+
         // todo Add some code before harvest #2 to simulate earning yield
-        // todo Ensure initial harvest() && investing newly transferred amount in pre-existing CA is done correctly (through using prank(MellowSUDO) or prank.(mellowBot)).
-        // todo Check that CA has increased the proper amount (in this simulation, we're the only one depositing).
+
+        // need gearboxFunction called by mellow bot to add newly deposited vault funds to credit account
+
+        // todo Check that CA has increased the proper amount (in this simulation, we're the only one depositing) probably via a gearbox function
+
+        // check that if we try to liquidate as strategist, all we'll be able to do is registerWithdraw bc funds are no in CA at least for an epoch
+           // do this by checking want.balanceOf(strategist) == balanceAfter
+        
         // todo Check for any emitted events - though this isn't our code at this point.
 
         // Harvest 2: Realize profit
         skip(1);
         vm.prank(strategist);
         strategy.harvest(); // NOTE - this calls prepareReturn() && liquidatePosition(). Taking what it needs from mellow if possible or registering a withdrawal.
+        
         // todo registerWithrawal here bc we haven't registered it before yet. Check for events emitted, check for gearboxRootVault.lpTokensWaitingForClaim() that it is what it should be.
+        
         // todo check that gearboxRootVault.primaryTokensToClaim(address(this)) hasn't changed.
+        
         skip(6 hours); // todo roll to block where epoch is done and CA is closed. todo may need a helper function for this.
 
         // todo call strategy.harvest() again and now the right amount of wantTokens should be withdrawn to the strategy.sol

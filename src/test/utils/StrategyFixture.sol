@@ -8,6 +8,7 @@ import {ExtendedTest} from "./ExtendedTest.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {IVault} from "../../interfaces/Vault.sol";
 import "forge-std/console.sol";
+import {IGearboxRootVault} from "../../interfaces/Mellow/IGearboxRootVault.sol";
 
 // NOTE: if the name of the strat or file changes this needs to be updated
 import {Strategy} from "../../Strategy.sol";
@@ -24,6 +25,8 @@ contract StrategyFixture is ExtendedTest {
     Strategy public strategy;
     IERC20 public weth;
     IERC20 public want;
+    IERC20 public lpt;
+    IGearboxRootVault public gearboxRootVault;
 
     mapping(string => address) public tokenAddrs;
     mapping(string => uint256) public tokenPrices;
@@ -68,6 +71,8 @@ contract StrategyFixture is ExtendedTest {
         );
         vault = IVault(_vault);
         strategy = Strategy(_strategy);
+        lpt = IERC20(_strategy);
+        gearboxRootVault = IGearboxRootVault(_strategy);
 
         minFuzzAmt = 10 ** vault.decimals() / 10;
         console.log(
@@ -119,6 +124,8 @@ contract StrategyFixture is ExtendedTest {
     // Deploys a strategy
     function deployStrategy(address _vault) public returns (address) {
         address _mellowRootVault = 0xD3442BA55108d33FA1EB3F1a3C0876F892B01c44;
+        
+        // TODO - mellow interface applied here
         Strategy _strategy = new Strategy(_vault, _mellowRootVault);
 
         return address(_strategy);
@@ -170,5 +177,10 @@ contract StrategyFixture is ExtendedTest {
         tokenPrices["USDT"] = 1;
         tokenPrices["USDC"] = 1;
         tokenPrices["DAI"] = 1;
+    }
+
+    function _getCurrentEpochLPTPriceD18() internal view returns (uint256) {
+        uint256 _currentEpochLPTPriceD18 = (gearboxRootVault.epochToPriceForLpTokenD18(gearboxRootVault.currentEpoch()));
+        return _currentEpochLPTPriceD18;
     }
 }
