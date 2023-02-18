@@ -124,7 +124,7 @@ contract StrategyFixture is ExtendedTest {
     // Deploys a strategy
     function deployStrategy(address _vault) public returns (address) {
         address _mellowRootVault = 0xD3442BA55108d33FA1EB3F1a3C0876F892B01c44;
-        
+
         // TODO - mellow interface applied here
         Strategy _strategy = new Strategy(_vault, _mellowRootVault);
 
@@ -182,5 +182,24 @@ contract StrategyFixture is ExtendedTest {
     function _getCurrentEpochLPTPriceD18() internal view returns (uint256) {
         uint256 _currentEpochLPTPriceD18 = (gearboxRootVault.epochToPriceForLpTokenD18(gearboxRootVault.currentEpoch()));
         return _currentEpochLPTPriceD18;
+    }
+
+    // have a helper function that has conditional logic checking:
+    function _mellowBotOpenCA() internal {
+        // 1. _mellowBotInvestMoreCA();
+
+        // 2. if(creditAccount is closed){skip enough blocks, simulate bot && reopen creditAccount depositing deposits in}.
+    }
+
+    // helper function investing any mellow-vault primaryToken into CA while in middle of an epoch
+    function _mellowBotInvestMoreCA() internal {
+        // 1. if(creditAccount is open){simulate mellow bot && input any new primaryToken to credit account/strategy}
+    }
+
+    // helper function closing credit account at next epoch
+    function _mellowBotCloseCA() internal {
+        // 1. if(creditAccount is open){simulate mellow bot && skip ahead a couple blocks, auto-close CA or manual-close CA}
+
+        // 2. if(creditAccount is closed){do nothing}
     }
 }
