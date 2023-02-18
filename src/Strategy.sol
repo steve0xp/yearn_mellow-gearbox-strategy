@@ -12,6 +12,7 @@ import {IERC20RootVaultGovernance} from "./interfaces/Mellow/IERC20RootVaultGove
 import "./utils/Mellow/ExceptionsLibrary.sol";
 import "./utils/Mellow/CommonLibrary.sol";
 import "./utils/Mellow/FullMath.sol";
+import "forge-std/console.sol";
 
 /// @title StrategyMellow-Gearbox_wETH: Yearn strategy for Mellow Fearless Gearboxstrategy
 /// @author @steve0xp && @0xValJohn
@@ -117,16 +118,34 @@ contract Strategy is BaseStrategy {
 
             (uint256[] memory minTvl,) = gearboxRootVault.tvl();
 
+            uint256 LP_CHECK_totalSupplyTEST = gearboxRootVault.totalSupply();
+            uint256 LP_CHECK_totalLpTokensWaitingWithdrawal = gearboxRootVault.totalLpTokensWaitingWithdrawal();
+            uint256 LP_CHECK_chargeFees = _chargeFees(thisNFT, minTvl[0], gearboxRootVault.totalSupply());
+
+            console.log(
+                "MARKER #1 CHECKING VARS VALUES: LP_CHECK_totalSupplyTEST: %s, LP_CHECK_chargeFees: %s, LP_CHECK_totalLpTokensWaitingWithdrawal: %s",
+                LP_CHECK_totalSupplyTEST,
+                LP_CHECK_totalLpTokensWaitingWithdrawal,
+                LP_CHECK_chargeFees
+            );
+
             uint256 lpSupply = (
-                gearboxRootVault.totalSupply() - gearboxRootVault.totalLpTokensWaitingWithdrawal()
-                    - _chargeFees(thisNFT, minTvl[0], gearboxRootVault.totalSupply())
+                gearboxRootVault.totalSupply() - gearboxRootVault.totalLpTokensWaitingWithdrawal() + LP_CHECK_chargeFees
             );
 
             uint256[] memory totalWantCapacityRemaining = new uint256[](1);
 
+            console.log(
+                "MARKER #2 CHECKING VARS VALUES: minTVL: %s, tokenLimit(amount able to be invested in mellow vault): %s, lpSupply: %s",
+                minTvl[0],
+                params.tokenLimit,
+                lpSupply
+            );
+
+            // @todo - BELOW IS THE LOC THAT IS CAUSING UNDERFLOW ERRORS
             totalWantCapacityRemaining[0] = (minTvl[0] * ((params.tokenLimit - lpSupply) * 1e18 / lpSupply)) / 1e18;
 
-            require(totalWantCapacityRemaining[0] == 0, "Vault want capacity at max");
+            require(lpSupply < totalWantCapacityRemaining[0], "Vault want capacity at max"); // @todo check if a revert is okay with yearn strategy harvest() sequences
 
             if (totalWantCapacityRemaining[0] > _amountToInvest[0]) {
                 gearboxRootVault.deposit(_amountToInvest, _minLpToMint, ""); // @todo investigate vaultOptions

@@ -7,6 +7,8 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {ExtendedTest} from "./ExtendedTest.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {IVault} from "../../interfaces/Vault.sol";
+import "forge-std/console.sol";
+import {IGearboxRootVault} from "../../interfaces/Mellow/IGearboxRootVault.sol";
 
 // NOTE: if the name of the strat or file changes this needs to be updated
 import {Strategy} from "../../Strategy.sol";
@@ -23,6 +25,8 @@ contract StrategyFixture is ExtendedTest {
     Strategy public strategy;
     IERC20 public weth;
     IERC20 public want;
+    IERC20 public lpt;
+    IGearboxRootVault public gearboxRootVault;
 
     mapping(string => address) public tokenAddrs;
     mapping(string => uint256) public tokenPrices;
@@ -52,21 +56,29 @@ contract StrategyFixture is ExtendedTest {
         _setTokenPrices();
         _setTokenAddrs();
 
-        // @todo _mellowRootVault to test:
-        // WETH: 0xa2607696699dbF3c4de584e244f4E3df58cdf69c (partially filled)
-        // USDC: 0x34c277B0c690936168cF436B904B2242a11E7eeA (full)
+        // @todo replace the following addresses with proper ones once Mellow has them setup (ref - convos w/ them) - see issue #20
+        // Root Vault:  0xD3442BA55108d33FA1EB3F1a3C0876F892B01c44
+        // ERC20 Vault:  0x27E3E8E275523850236485FE2341e55689a81Bb1
+        // Gearbox Vault:  0x3e80E11C8fD3e05221fE63BE3487f9f0A4316Dc8
 
         // Choose a token from the tokenAddrs mapping, see _setTokenAddrs for options
-        string memory token = "DAI";
+        string memory token = "WETH";
         weth = IERC20(tokenAddrs["WETH"]);
         want = IERC20(tokenAddrs[token]);
 
-        (address _vault, address _strategy) =
-            deployVaultAndStrategy(address(want), gov, rewards, "", "", guardian, management, keeper, strategist);
+        (address _vault, address _strategy) = deployVaultAndStrategy(
+            address(want), gov, rewards, "yMellowVault", "yv-Mellow-WETH", guardian, management, keeper, strategist
+        );
         vault = IVault(_vault);
         strategy = Strategy(_strategy);
+        lpt = IERC20(_strategy);
+        gearboxRootVault = IGearboxRootVault(_strategy);
 
         minFuzzAmt = 10 ** vault.decimals() / 10;
+        console.log(
+            "This is a test: vault decimals is %s, && maxDollarNotional is %s", vault.decimals(), maxDollarNotional
+        );
+
         maxFuzzAmt = uint256(maxDollarNotional / tokenPrices[token]) * 10 ** vault.decimals();
         bigAmount = uint256(bigDollarNotional / tokenPrices[token]) * 10 ** vault.decimals();
 
@@ -101,8 +113,8 @@ contract StrategyFixture is ExtendedTest {
         IVault _vault = IVault(_vaultAddress);
 
         vm.prank(_gov);
-        _vault.initialize(_token, _gov, _rewards, _name, _symbol, _guardian, _management);
 
+        _vault.initialize(_token, _gov, _rewards, _name, _symbol, _guardian, _management);
         vm.prank(_gov);
         _vault.setDepositLimit(type(uint256).max);
 
@@ -111,7 +123,9 @@ contract StrategyFixture is ExtendedTest {
 
     // Deploys a strategy
     function deployStrategy(address _vault) public returns (address) {
-        address _mellowRootVault = 0xa2607696699dbF3c4de584e244f4E3df58cdf69c;
+        address _mellowRootVault = 0xD3442BA55108d33FA1EB3F1a3C0876F892B01c44;
+
+        // TODO - mellow interface applied here
         Strategy _strategy = new Strategy(_vault, _mellowRootVault);
 
         return address(_strategy);
@@ -163,5 +177,29 @@ contract StrategyFixture is ExtendedTest {
         tokenPrices["USDT"] = 1;
         tokenPrices["USDC"] = 1;
         tokenPrices["DAI"] = 1;
+    }
+
+    function _getCurrentEpochLPTPriceD18() internal view returns (uint256) {
+        uint256 _currentEpochLPTPriceD18 = (gearboxRootVault.epochToPriceForLpTokenD18(gearboxRootVault.currentEpoch()));
+        return _currentEpochLPTPriceD18;
+    }
+
+    // have a helper function that has conditional logic checking:
+    function _mellowBotOpenCA() internal {
+        // 1. _mellowBotInvestMoreCA();
+
+        // 2. if(creditAccount is closed){skip enough blocks, simulate bot && reopen creditAccount depositing deposits in}.
+    }
+
+    // helper function investing any mellow-vault primaryToken into CA while in middle of an epoch
+    function _mellowBotInvestMoreCA() internal {
+        // 1. if(creditAccount is open){simulate mellow bot && input any new primaryToken to credit account/strategy}
+    }
+
+    // helper function closing credit account at next epoch
+    function _mellowBotCloseCA() internal {
+        // 1. if(creditAccount is open){simulate mellow bot && skip ahead a couple blocks, auto-close CA or manual-close CA}
+
+        // 2. if(creditAccount is closed){do nothing}
     }
 }
